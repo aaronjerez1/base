@@ -4,7 +4,7 @@
 #include <openssl/rsa.h>
 #include <serialize.h>
 #include <vector>
-
+#include "uint256.h"
 
 // todo: secure_allocator here and in serialize.h
 typedef std::vector<unsigned char, secure_allocator<unsigned char>> CPrivKey;
@@ -122,7 +122,7 @@ class CKey
 		return vchPubKey;
 	}
 
-	bool Sign(int hash, std::vector<unsigned char>& vchSig) // TODO: change hash from int to uint256
+	bool Sign(uint256 hash, std::vector<unsigned char>& vchSig)
 	{
 		vchSig.clear();
 
@@ -154,7 +154,7 @@ class CKey
 		return true;
 	}
 
-	bool Verify(int hash, const std::vector<unsigned char>& vchSig)
+	bool Verify(uint256 hash, const std::vector<unsigned char>& vchSig)
 	{
 		// Create a context for the verification operation
 		EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(pkey, NULL);
@@ -179,7 +179,7 @@ class CKey
 		return (result == 1);
 	}
 
-	static bool Sign(const CPrivKey& vchPrivKey, int hash, std::vector<unsigned char>& vchSig)
+	static bool Sign(const CPrivKey& vchPrivKey, uint256 hash, std::vector<unsigned char>& vchSig)
 	{
 		CKey key;
 		if (!key.SetPrivKey(vchPrivKey))
@@ -187,7 +187,7 @@ class CKey
 		return key.Sign(hash, vchSig);
 	}
 
-	static bool Verify(const std::vector<unsigned char>& vchPubKey, int hash, const std::vector<unsigned char>& vchSig)
+	static bool Verify(const std::vector<unsigned char>& vchPubKey, uint256 hash, const std::vector<unsigned char>& vchSig)
 	{
 		CKey key;
 		if (!key.SetPubKey(vchPubKey))
