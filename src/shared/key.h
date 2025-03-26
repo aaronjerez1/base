@@ -122,7 +122,7 @@ class CKey
 		return vchPubKey;
 	}
 
-	bool Sign(unsigned char* hash, std::vector<unsigned char>& vchSig) // TODO: change hash to uint256
+	bool Sign(int hash, std::vector<unsigned char>& vchSig) // TODO: change hash from int to uint256
 	{
 		vchSig.clear();
 
@@ -177,5 +177,21 @@ class CKey
 
 		// Return true if verification succeeded (result == 1)
 		return (result == 1);
+	}
+
+	static bool Sign(const CPrivKey& vchPrivKey, int hash, std::vector<unsigned char>& vchSig)
+	{
+		CKey key;
+		if (!key.SetPrivKey(vchPrivKey))
+			return false;
+		return key.Sign(hash, vchSig);
+	}
+
+	static bool Verify(const std::vector<unsigned char>& vchPubKey, int hash, const std::vector<unsigned char>& vchSig)
+	{
+		CKey key;
+		if (!key.SetPubKey(vchPubKey))
+			return false;
+		return key.Verify(hash, vchSig);
 	}
 };
