@@ -20,8 +20,11 @@ add_subdirectory(src)
 
 
 
-if (CMAKE_VERSION VERSION_GREATER 3.12)
-  set_property(TARGET base PROPERTY CXX_STANDARD 20)
-endif()
+# Set C++20 as the default standard for all targets
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+
 
 # TODO: Add tests and install targets if needed.

@@ -9,6 +9,7 @@ set(SRC_FILES
 # Add subdirectories
 add_subdirectory(miner)
 add_subdirectory(database)
+add_subdirectory(script)
 add_subdirectory(shared)
 
 
@@ -20,6 +21,7 @@ add_executable(base
     ${MINER_SOURCES}
     ${DB_SOURCES}
     ${SHARED_SOURCES}
+    ${SCRIPT_SOURCES}
 )
 target_link_libraries(base PRIVATE OpenSSL::SSL)
 target_link_libraries(base PRIVATE OpenSSL::Crypto)
@@ -32,7 +34,11 @@ target_include_directories(base PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/db/transactiondb
     ${CMAKE_CURRENT_SOURCE_DIR}/db/walletdb
     ${CMAKE_CURRENT_SOURCE_DIR}/shared
+    ${CMAKE_CURRENT_SOURCE_DIR}/script
 )
+
+#target_precompile_headers(base PRIVATE pch.h)
+
 
 
 

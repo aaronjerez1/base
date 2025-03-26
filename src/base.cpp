@@ -1,6 +1,6 @@
 ﻿// base.cpp : Defines the entry point for the application.
 //
-#include <openssl/bn.h>
+//#include <openssl/bn.h>
 
 #include "base.h"
 #include "miner/miner.h"
