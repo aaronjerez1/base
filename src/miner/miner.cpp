@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include "miner.h"
 #include "../shared/key.h"
+#include "../shared/bignum.h"
 #include "../globals.h"
 
 //#include "../shared/uint256.h"
@@ -44,22 +45,22 @@ void CoinMiner() {
     pthread_setschedparam(pthread_self(), SCHED_OTHER, &param);
     nice(19);  // Further reduce priority
 
-    //CKey key;
-    //key.MakeNewKey();
-    //CBigNum bnExtraNonce = 0;
-    //while (fGenerateBasecoins)
-    //{
-    //    //Sleep(50);  //TODO: net.h/cpp 
-    //    //CheckForShutdown(3);
-    //    //while (vNodes.empty())
-    //    //{
-    //    //    Sleep(1000);
-    //    //    CheckForShutdown(3);
-    //    //}
+    CKey key;
+    key.MakeNewKey();
+    CBigNum bnExtraNonce = 0;
+    while (fGenerateBasecoins)
+    {
+        //    //Sleep(50);  //TODO: net.h/cpp 
+        //    //CheckForShutdown(3);
+        //    //while (vNodes.empty())
+        //    //{
+        //    //    Sleep(1000);
+        //    //    CheckForShutdown(3);
+        //    //}
 
-    //    unsigned int nTransactionsUpdatedLast = nTransactionsUpdated;
-    //    //CBlockIndex* pindexPrev = pindexBest;
-
+        unsigned int nTransactionsUpdatedLast = nTransactionsUpdated;
+            //CBlockIndex* pindexPrev = pindexBest;
+    }
     
 
 }

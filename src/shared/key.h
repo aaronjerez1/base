@@ -12,7 +12,9 @@ typedef std::vector<unsigned char, secure_allocator<unsigned char>> CPrivKey;
 
 class CKey
 {
+protected:
 	EVP_PKEY* pkey;
+public:
 	CKey()
 	{
 		EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
