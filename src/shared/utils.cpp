@@ -1,4 +1,5 @@
-//#include "utils.h"
+#include "utils.h"
+#include <cstdarg>
 //
 //
 //
@@ -39,40 +40,40 @@
 //
 //
 //
-///**
-// * Format a string with printf-style formatting
-// * Dynamically allocates memory if needed to accommodate the formatted string
-// * Returns a std::string with the formatted content
-// */
-//std::string strprintf(const char* format, ...)
-//{
-//    // Initial buffer on the stack
-//    char buffer[1024];
-//    std::string result;
-//
-//    va_list args;
-//    va_start(args, format);
-//
-//    // Try with the stack buffer first
-//    int ret = vsnprintf(buffer, sizeof(buffer), format, args);
-//
-//    if (ret >= 0)
-//    {
-//        if (ret < static_cast<int>(sizeof(buffer)))
-//        {
-//            // It fit in our buffer
-//            result = std::string(buffer, ret);
-//        }
-//        else
-//        {
-//            // We need a bigger buffer
-//            result.resize(ret);
-//            va_end(args);
-//            va_start(args, format);
-//            vsnprintf(&result[0], ret + 1, format, args);
-//        }
-//    }
-//
-//    va_end(args);
-//    return result;
-//}
+/**
+ * Format a string with printf-style formatting
+ * Dynamically allocates memory if needed to accommodate the formatted string
+ * Returns a std::string with the formatted content
+ */
+std::string strprintf(const char* format, ...)
+{
+    // Initial buffer on the stack
+    char buffer[1024];
+    std::string result;
+
+    va_list args;
+    va_start(args, format);
+
+    // Try with the stack buffer first
+    int ret = vsnprintf(buffer, sizeof(buffer), format, args);
+
+    if (ret >= 0)
+    {
+        if (ret < static_cast<int>(sizeof(buffer)))
+        {
+            // It fit in our buffer
+            result = std::string(buffer, ret);
+        }
+        else
+        {
+            // We need a bigger buffer
+            result.resize(ret);
+            va_end(args);
+            va_start(args, format);
+            vsnprintf(&result[0], ret + 1, format, args);
+        }
+    }
+
+    va_end(args);
+    return result;
+}

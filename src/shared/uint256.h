@@ -6,12 +6,12 @@
 #include <string>
 #include <cstring>
 #include <vector>
+#include "types.h"
 using std::vector;
 using std::string;
 
-typedef long long  int64;
-typedef unsigned long long  uint64;
-static const int VERSION = 420; // mmmm :3 
+
+
 
 
 inline int Testuint256AdHoc(vector<string> vArg);

@@ -1,6 +1,7 @@
 
 #include "shared/uint256.h"
 #include "shared/serialize.h"
+#include "shared/utils.h"
 
 namespace Globals {
     //string GetAppDir();
@@ -67,15 +68,15 @@ namespace Globals {
 			return !(a == b);
 		}
 
-		//string ToString() const
-		//{
-		//	return strprintf("COutPoint(%s, %d)", hash.ToString().substr(0, 6).c_str(), n);
-		//}
+		string ToString() const
+		{
+			return strprintf("COutPoint(%s, %d)", hash.ToString().substr(0, 6).c_str(), n);
+		}
 
-		//void print() const
-		//{
-		//	printf("%s\n", ToString().c_str());
-		//}
+		void print() const
+		{
+			printf("%s\n", ToString().c_str());
+		}
 	};
 
 	//
@@ -86,6 +87,7 @@ namespace Globals {
 	class CTxIn
 	{
 		COutPoint prevout;
+		//CScript scriptSig;
 	};
 
 
@@ -111,6 +113,6 @@ namespace Globals {
 		unsigned int nnonce;
 
 		// netwrok and disk
-		std::vector<CTransaction> vtx;
+		//std::vector<CTransaction> vtx;
 	};
 }
