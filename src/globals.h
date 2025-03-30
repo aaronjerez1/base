@@ -2,6 +2,7 @@
 #include "shared/uint256.h"
 #include "shared/serialize.h"
 #include "shared/utils.h"
+#include "script/script.h"
 
 namespace Globals {
     //string GetAppDir();
@@ -87,7 +88,8 @@ namespace Globals {
 	class CTxIn
 	{
 		COutPoint prevout;
-		//CScript scriptSig;
+		CScript scriptSig;
+	public:
 	};
 
 
