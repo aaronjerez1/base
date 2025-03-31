@@ -10,7 +10,7 @@ if (POLICY CMP0141)
 endif()
 # Add vcpkg toolchain file
 set(CMAKE_TOOLCHAIN_FILE "/home/aaron/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
-
+ 
 project ("base")
 
 # Add source to this project's executable.

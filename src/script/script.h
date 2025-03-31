@@ -535,9 +535,9 @@ public:
         printf("CScript(%s)\n", HexStr(begin(), end()).c_str());
     }
 
-    string ToString() const
+    std::string ToString() const
     {
-        string str;
+        std::string str;
         opcodetype opcode;
         vector<unsigned char> vch;
         const_iterator it = begin();

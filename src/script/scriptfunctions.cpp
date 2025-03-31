@@ -37,3 +37,5 @@ void MakeSameSize(valtype& vch1, valtype& vch2)
 #define altstacktop(i) (altstack.at(altstack.size()+(i)))
 
 //bool EvalScript(const CScript& script, const C) // TODO: wait let's proceed with the construction of the globlas. get got what we need.
+
+

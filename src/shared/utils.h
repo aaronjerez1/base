@@ -1,6 +1,10 @@
 #pragma once
 #include <string>
 #include "standard.h"
+#include "serialize.h"
+#include "uint256.h"
+#include <openssl/sha.h>
+
 
 std::string strprintf(const char* format, ...);
 
@@ -30,4 +34,27 @@ template<typename T>
 void PrintHex(const T pbegin, const T pend, const char* pszFormat = "%s", bool fSpaces = true)
 {
     printf(pszFormat, HexStr(pbegin, pend, fSpaces).c_str());
+}
+
+
+template<typename T1>
+inline uint256 Hash(const T1 pbegin, const T1 pend)
+{
+    uint256 hash1;
+    SHA256((unsigned char*)&pbegin[0], (pend - pbegin) * sizeof(pbegin[0]), (unsigned char*)&hash1);
+    uint256 hash2;
+    SHA256((unsigned char*)&hash1, sizeof(hash1), (unsigned char*)&hash2);
+    return hash2;
+}
+
+template<typename T>
+uint256 SerializeHash(const T& obj, int nType = SER_GETHASH, int nVersion = VERSION)
+{
+    // Most of the time is spent allocating and deallocating CDataStream's
+    // buffer.  If this ever needs to be optimized further, make a CStaticStream
+    // class with its buffer on the stack.
+    CDataStream ss(nType, nVersion);
+    ss.reserve(10000);
+    ss << obj;
+    return Hash(ss.begin(), ss.end());
 }

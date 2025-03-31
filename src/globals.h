@@ -12,8 +12,8 @@ namespace Globals {
 	extern unsigned int nTransactionsUpdated;
 
 	extern const unsigned int MAX_SIZE;;
-	//extern const int64 COIN = 100000000;
-	//extern const int64 CENT = 1000000;
+	extern const int64 COIN;
+	extern const int64 CENT;
 	extern const int COINBASE_MATURITY;
 
 	//static const CBigNum bnProofOfWorkLimit(~uint256(0) >> 32);
@@ -161,6 +161,107 @@ namespace Globals {
 		//int64 GetDebit() const; TODO: 
 
 	};
+
+	//
+	// An output of a transaction.
+	// IT contains the public key that the next input must be able to sign with in order to claim it.
+	//
+
+	class CTxOut
+	{
+	public:
+		int64 nValue;
+		CScript scriptPubKey;
+		
+		IMPLEMENT_SERIALIZE
+		(
+			READWRITE(nValue);
+			READWRITE(scriptPubKey);
+			)
+
+
+		CTxOut()
+		{
+			SetNull();
+		}
+
+		CTxOut(int64 nValueIn, CScript scriptPubKeyIn)
+		{
+			nValue = nValueIn;
+			scriptPubKey = scriptPubKeyIn;
+		}
+
+		void SetNull()
+		{
+			nValue = -1;
+			scriptPubKey.clear();
+		}
+
+		bool IsNull()
+		{
+			return (nValue == -1);
+		}
+
+		uint256 GetHash() const
+		{
+			return SerializeHash(*this);
+		}
+
+
+		bool IsMine() const
+		{
+			//return ::IsMine(scriptPubKey); //TODO: scriptfunctions.cpp
+			return true;
+		}
+
+		int64 GetCredit() const
+		{
+			if (IsMine())
+				return nValue;
+			return 0;
+		}
+
+		friend bool operator==(const CTxOut& a, const CTxOut& b)
+		{
+			return (a.nValue == b.nValue &&
+				a.scriptPubKey == b.scriptPubKey);
+		}
+
+		friend bool operator!=(const CTxOut& a, const CTxOut& b)
+		{
+			return !(a == b);
+		}
+
+		/// <summary>
+		/// PRINTING
+		/// </summary>
+		/// <returns></returns>
+		std::string ToString() const
+		{
+			if (scriptPubKey.size() < 6)
+				return "CTxOut(error)";
+			return strprintf("CTxOut(nValue=%I64d.%08I64d, scriptPubKey=%s)", nValue / COIN, nValue % COIN, scriptPubKey.ToString().substr(0, 24).c_str());
+		}
+
+		void print() const
+		{
+			printf("%s\n", ToString().c_str());
+		}
+	};
+
+
+	//
+	// The basic transaction that is broadcasted on the network and contained in
+	// blocks.  A transaction can contain multiple inputs and outputs.
+	//
+
+	class CTransaction
+	{
+	public:
+		int nVersion;
+		//ve
+	};
+
 
 
 
