@@ -472,7 +472,7 @@
 
 		//bool ReadFromDisk(CDiskTxPos pos, FILE** pfileRet = NULL)
 		//{
-		//	CAutoFile filein = 1; // TODO ING: CAUTOFILE in serialize
+		//	CAutoFile filein = OpenBlockFile()
 		//}
 
 		friend bool operator==(const CTransaction& a, const CTransaction& b)
