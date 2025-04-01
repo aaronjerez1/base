@@ -12,8 +12,10 @@
 //#include "../shared/uint256.h"
 //#include "../shared/bignum.h"
 //#include "../shared/sha.h"
-using Globals::fGenerateBasecoins;
-using Globals::nTransactionsUpdated;
+
+
+//using Globals::fGenerateBasecoins;
+//using Globals::nTransactionsUpdated;
 
 //////////////////////////////////////////////////////////////////////////////
 //

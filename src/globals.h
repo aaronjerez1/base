@@ -4,7 +4,7 @@
 #include "shared/utils.h"
 #include "script/script.h"
 
-namespace Globals {
+//namespace Globals {
     //string GetAppDir();
 
 
@@ -417,4 +417,4 @@ namespace Globals {
 			vMerkleTree.clear();
 		}
 	};
-}
+//}

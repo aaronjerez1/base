@@ -1,6 +1,6 @@
 #include "globals.h"
-namespace Globals
-{
+//namespace Globals
+//{
     int fGenerateBasecoins = 0;
     unsigned int nTransactionsUpdated = 0;
     const int64 COIN = 100000000;
@@ -10,4 +10,4 @@ namespace Globals
     int nBestHeight = -1;
 
 
-}
+//}
