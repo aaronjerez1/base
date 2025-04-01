@@ -16,6 +16,10 @@ namespace Globals {
 	extern const int64 CENT;
 	extern const int COINBASE_MATURITY;
 
+
+	extern int nBestHeight;
+
+
 	//static const CBigNum bnProofOfWorkLimit(~uint256(0) >> 32);
 	
 	class CDiskTxPos
@@ -103,11 +107,11 @@ namespace Globals {
 			nSequence = UINT_MAX;
 		}
 		
-		explicit CTxIn(COutPoint preoutIn, CScript scriptSigIn = CScript(), unsigned int nSequence = UINT_MAX)
+		explicit CTxIn(COutPoint preoutIn, CScript scriptSigIn = CScript(), unsigned int nSequenceIn = UINT_MAX)
 		{
 			prevout = preoutIn;
 			scriptSig = scriptSigIn;
-			nSequence = nSequence;
+			nSequence = nSequenceIn;
 		}
 
 		CTxIn(uint256 hashPrevTx, unsigned int nOut, CScript scriptSigIn = CScript(), unsigned int nSequenceIn = UINT_MAX)
@@ -259,7 +263,93 @@ namespace Globals {
 	{
 	public:
 		int nVersion;
-		//ve
+		std::vector<CTxIn> vin;
+		std::vector<CTxOut> vout;
+		int nLockTime;
+
+		IMPLEMENT_SERIALIZE
+		(
+			READWRITE(this->nVersion);
+			nVersion = this->nVersion;
+			READWRITE(vin);
+			READWRITE(vout);
+			READWRITE(nLockTime);
+		)
+
+
+		CTransaction()
+		{
+			SetNull();
+		}
+
+		void SetNull()
+		{
+			nVersion = 1;
+			vin.clear();
+			vout.clear();
+			nLockTime = 0;
+		}
+
+		bool IsNull() const
+		{
+			return vin.empty() && vout.empty();
+		}
+
+		uint256 GetHash() const
+		{
+			return SerializeHash(*this);
+		}
+
+		bool IsFinal() const
+		{
+			if (nLockTime == 0 || nLockTime < nBestHeight)
+			{
+				return true;
+			}
+			for (const CTxIn& txin : vin)
+			{
+				if (!txin.IsFinal())
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		bool IsNewerThan(const CTransaction& old) const
+		{
+			if (vin.size() != old.vin.size())
+			{
+				return false;
+			}
+			for (int i = 0; i < vin.size(); i++)
+			{
+				if (vin[i].prevout != old.vin[i].prevout)
+				{
+					return false;
+				}
+			}
+
+			bool fNewer = false;
+			unsigned int nLowest = UINT_MAX;
+			for (int i = 0; i < vin.size(); i++)
+			{
+				if (vin[i].nSequence != old.vin[i].nSequence)
+				{
+					if (vin[i].nSequence <= nLowest)
+					{
+						fNewer = false;
+						nLowest = vin[i].nSequence;
+					}
+					if (old.vin[i].nSequence < nLowest)
+					{
+						fNewer = true;
+						nLowest = old.vin[i].nSequence;
+					}
+				}
+			}
+			return fNewer;
+		}
 	};
 
 
@@ -283,9 +373,48 @@ namespace Globals {
 		uint256 hashMerkleRoot;
 		unsigned int nTime;
 		unsigned int nBits;
-		unsigned int nnonce;
+		unsigned int nNonce;
 
 		// netwrok and disk
-		//std::vector<CTransaction> vtx;
+		std::vector<CTransaction> vtx;
+
+		// memory only
+		mutable std::vector<uint256> vMerkleTree;
+
+
+
+		//IMPLEMENT_SERIALIZE
+		//(
+		//	READWRITE(this->nVersion);
+		//	nVersion = this->nVersion;
+		//	READWRITE(hashPrevBlock);
+		//	READWRITE(hashMerkleRoot);
+		//	READWRITE(nTime);
+		//	READWRITE(nBits);
+		//	READWRITE(nNonce);
+
+		//	// ConnectBlock depends on vtx being last so it can calculate offset
+		//	if (!(nType & (SER_GETHASH | SER_BLOCKHEADERONLY)))
+		//		READWRITE(vtx);
+		//	else if (fRead)
+		//		const_cast<CBlock*>(this)->vtx.clear();
+		//)
+
+		CBlock()
+		{
+			SetNull();
+		}
+
+		void SetNull()
+		{
+			nVersion = 1;
+			hashPrevBlock = 0;
+			hashMerkleRoot = 0;
+			nTime = 0;
+			nBits = 0;
+			nNonce = 0;
+			vtx.clear();
+			vMerkleTree.clear();
+		}
 	};
 }

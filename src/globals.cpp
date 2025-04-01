@@ -7,4 +7,7 @@ namespace Globals
     const int64 CENT = 1000000;
     const int COINBASE_MATURITY = 100;
 
+    int nBestHeight = -1;
+
+
 }

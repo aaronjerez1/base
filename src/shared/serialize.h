@@ -7,6 +7,8 @@
 #include <bits/stdc++.h>
 #include "types.h"
 #include <ios>
+
+
 //
 // Basic types
 //
@@ -42,6 +44,24 @@ template<typename Stream> inline void Serialize(Stream& s, uint64 a, int, int = 
 template<typename Stream> inline void Serialize(Stream& s, float a, int, int = 0) { WRITEDATA(s, a); }
 template<typename Stream> inline void Serialize(Stream& s, double a, int, int = 0) { WRITEDATA(s, a); }
 
+template<typename Stream> inline void Unserialize(Stream& s, char& a, int, int = 0) { READDATA(s, a); }
+template<typename Stream> inline void Unserialize(Stream& s, signed char& a, int, int = 0) { READDATA(s, a); }
+template<typename Stream> inline void Unserialize(Stream& s, unsigned char& a, int, int = 0) { READDATA(s, a); }
+template<typename Stream> inline void Unserialize(Stream& s, signed short& a, int, int = 0) { READDATA(s, a); }
+template<typename Stream> inline void Unserialize(Stream& s, unsigned short& a, int, int = 0) { READDATA(s, a); }
+template<typename Stream> inline void Unserialize(Stream& s, signed int& a, int, int = 0) { READDATA(s, a); }
+template<typename Stream> inline void Unserialize(Stream& s, unsigned int& a, int, int = 0) { READDATA(s, a); }
+template<typename Stream> inline void Unserialize(Stream& s, signed long& a, int, int = 0) { READDATA(s, a); }
+template<typename Stream> inline void Unserialize(Stream& s, unsigned long& a, int, int = 0) { READDATA(s, a); }
+template<typename Stream> inline void Unserialize(Stream& s, int64& a, int, int = 0) { READDATA(s, a); }
+template<typename Stream> inline void Unserialize(Stream& s, uint64& a, int, int = 0) { READDATA(s, a); }
+template<typename Stream> inline void Unserialize(Stream& s, float& a, int, int = 0) { READDATA(s, a); }
+template<typename Stream> inline void Unserialize(Stream& s, double& a, int, int = 0) { READDATA(s, a); }
+
+
+inline unsigned int GetSerializeSize(bool a, int, int = 0) { return sizeof(char); }
+template<typename Stream> inline void Serialize(Stream& s, bool a, int, int = 0) { char f = a; WRITEDATA(s, f); }
+template<typename Stream> inline void Unserialize(Stream& s, bool& a, int, int = 0) { char f; READDATA(s, f); a = f; }
 
 
 
@@ -121,6 +141,7 @@ uint64 ReadCompactSize(Stream& is)
 }
 
 
+
 //
 //
 // string
@@ -158,7 +179,7 @@ unsigned int GetSerializeSize_impl(const std::vector<T, A>& v, int nType, int nV
 }
 
 template<typename T, typename A>
-unsigned int GetSerialize_impl(const std::vector<T, A>& v, int nType, int nVersion, const std::false_type&)
+unsigned int GetSerializeSize_impl(const std::vector<T, A>& v, int nType, int nVersion, const std::false_type&)
 {
     unsigned int nSize = GetSizeOfCompactSize(v.size());
     for (typename std::vector<T, A>::const_iterator vi = v.begin(); vi != v.end(); ++vi)
@@ -417,98 +438,6 @@ struct secure_allocator : public std::allocator<T> {
     }
 };
 
-
-
-
-//
-// Support for IMPLEMENT_SERIALIZE and READWRITE macro
-//
-class CSerActionGetSerializeSize {};
-class CSerActionSerialize {};
-class CSerActionUnserialize {};
-
-template<typename Stream, typename T>
-inline unsigned int SerReadWrite(Stream& s, const T& obj, int nType, int nVersion, CSerActionGetSerializeSize ser_action)
-{
-    return ::GetSerializeSize(obj, nType, nVersion);
-}
-
-template<typename Stream, typename T>
-inline unsigned int SerReadWrite(Stream& s, const T& obj, int nType, int nVersion, CSerActionSerialize ser_action)
-{
-    ::Serialize(s, obj, nType, nVersion);
-    return 0;
-}
-
-template<typename Stream, typename T>
-inline unsigned int SerReadWrite(Stream& s, T& obj, int nType, int nVersion, CSerActionUnserialize ser_action)
-{
-    ::Unserialize(s, obj, nType, nVersion);
-    return 0;
-}
-
-struct ser_streamplaceholder
-{
-    int nType;
-    int nVersion;
-};
-
-
-////////////////////////////////////////////////////////////////
-//
-// Templates for serializing to anything that looks like a stream,
-// i.e. anything that supports .read(char*, int) and .write(char*, int)
-//
-
-enum
-{
-    // primary actions
-    SER_NETWORK = (1 << 0),
-    SER_DISK = (1 << 1),
-    SER_GETHASH = (1 << 2),
-
-    // modifiers
-    SER_SKIPSIG = (1 << 16),
-    SER_BLOCKHEADERONLY = (1 << 17),
-};
-
-
-#define IMPLEMENT_SERIALIZE(statements) \
-    unsigned int GetSerializeSize(int nType=0, int nVersion=VERSION) const \
-    {                                      \
-        CSerActionGetSerializeSize ser_action; \
-        const bool fGetSize = true;            \
-        const bool fWrite = false;             \
-        const bool fRead = false;              \
-        unsigned int nSerSize = 0;             \
-        ser_streamplaceholder s;               \
-        s.nType = nType;                       \
-        s.nVersion = nVersion;                 \
-        {statements}                           \
-        return nSerSize;                       \
-    }                                          \
-    template<typename Stream>                  \
-    void Serialize(Stream& s, int nType=0, int nVersion=VERSION) const \
-    {                                          \
-        CSerActionSerialize ser_action;        \
-        const bool fGetSize = false;            \
-        const bool fWrite = true;              \
-        const bool fRead = false;              \
-        unsigned int nSerSize = 0;             \
-        {statements}                           \
-    }                                          \
-    template<typename Stream>                  \
-    void Unserialize(Stream& s, int nType=0, int nVersion=VERSION) \
-    {                                          \
-        CSerActionSerialize ser_action;        \
-        const bool fGetSize = false;           \
-        const bool fWrite   = true;            \
-        const bool fRead    = false;           \
-        unsigned int nSerSize = 0;             \
-        {statements}                           \
-    }                                          \
-
-#define READWRITE(obj)      (nSerSize += ::SerReadWrite(s, (obj), nType, nVersion, ser_action))
 
 
 
@@ -847,5 +776,110 @@ public:
         return (*this);
     }
 };
+
+//
+// others derived from vector
+// // see implementation in script/impl.h
+class CScript; 
+inline unsigned int GetSerializeSize(const CScript& v, int nType, int nVersion);
+
+template<typename Stream>
+void Serialize(Stream& os, const CScript& v, int nType, int nVersion);
+
+template<typename Stream>
+void Unserialize(Stream& is, CScript& v, int nType, int nVersion);
+
+
+
+//
+// Support for IMPLEMENT_SERIALIZE and READWRITE macro
+//
+class CSerActionGetSerializeSize {};
+class CSerActionSerialize {};
+class CSerActionUnserialize {};
+
+template<typename Stream, typename T>
+inline unsigned int SerReadWrite(Stream& s, const T& obj, int nType, int nVersion, CSerActionGetSerializeSize ser_action)
+{
+    return ::GetSerializeSize(obj, nType, nVersion);
+}
+
+template<typename Stream, typename T>
+inline unsigned int SerReadWrite(Stream& s, const T& obj, int nType, int nVersion, CSerActionSerialize ser_action)
+{
+    ::Serialize(s, obj, nType, nVersion);
+    return 0;
+}
+
+template<typename Stream, typename T>
+inline unsigned int SerReadWrite(Stream& s, T& obj, int nType, int nVersion, CSerActionUnserialize ser_action)
+{
+    ::Unserialize(s, obj, nType, nVersion);
+    return 0;
+}
+
+struct ser_streamplaceholder
+{
+    int nType;
+    int nVersion;
+};
+
+
+////////////////////////////////////////////////////////////////
+//
+// Templates for serializing to anything that looks like a stream,
+// i.e. anything that supports .read(char*, int) and .write(char*, int)
+//
+
+enum
+{
+    // primary actions
+    SER_NETWORK = (1 << 0),
+    SER_DISK = (1 << 1),
+    SER_GETHASH = (1 << 2),
+
+    // modifiers
+    SER_SKIPSIG = (1 << 16),
+    SER_BLOCKHEADERONLY = (1 << 17),
+};
+
+
+#define IMPLEMENT_SERIALIZE(statements) \
+    unsigned int GetSerializeSize(int nType=0, int nVersion=VERSION) const \
+    {                                      \
+        CSerActionGetSerializeSize ser_action; \
+        const bool fGetSize = true;            \
+        const bool fWrite = false;             \
+        const bool fRead = false;              \
+        unsigned int nSerSize = 0;             \
+        ser_streamplaceholder s;               \
+        s.nType = nType;                       \
+        s.nVersion = nVersion;                 \
+        {statements}                           \
+        return nSerSize;                       \
+    }                                          \
+    template<typename Stream>                  \
+    void Serialize(Stream& s, int nType=0, int nVersion=VERSION) const \
+    {                                          \
+        CSerActionSerialize ser_action;        \
+        const bool fGetSize = false;            \
+        const bool fWrite = true;              \
+        const bool fRead = false;              \
+        unsigned int nSerSize = 0;             \
+        {statements}                           \
+    }                                          \
+    template<typename Stream>                  \
+    void Unserialize(Stream& s, int nType=0, int nVersion=VERSION) \
+    {                                          \
+        CSerActionSerialize ser_action;        \
+        const bool fGetSize = false;           \
+        const bool fWrite   = true;            \
+        const bool fRead    = false;           \
+        unsigned int nSerSize = 0;             \
+        {statements}                           \
+    }                                          \
+
+#define READWRITE(obj)      (nSerSize += ::SerReadWrite(s, (obj), nType, nVersion, ser_action))
+
 
 
