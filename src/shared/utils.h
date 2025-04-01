@@ -5,6 +5,9 @@
 #include "uint256.h"
 #include <openssl/sha.h>
 
+#define BEGIN(a)            ((char*)&(a))
+#define END(a)              ((char*)&((&(a))[1]))
+
 
 std::string strprintf(const char* format, ...);
 
@@ -47,6 +50,24 @@ inline uint256 Hash(const T1 pbegin, const T1 pend)
     return hash2;
 }
 
+template<typename T1, typename T2>
+inline uint256 Hash(const T1 p1begin, const T1 p1end,
+    const T2 p2begin, const T2 p2end)
+{
+    uint256 hash1;
+    SHA256_CTX ctx;
+    SHA256_Init(&ctx);
+    SHA256_Update(&ctx, (unsigned char*)&p1begin[0], (p1end - p1begin) * sizeof(p1begin[0]));
+    SHA256_Update(&ctx, (unsigned char*)&p2begin[0], (p2end - p2begin) * sizeof(p2begin[0]));
+    SHA256_Final((unsigned char*)&hash1, &ctx);
+    uint256 hash2;
+    SHA256((unsigned char*)&hash1, sizeof(hash1), (unsigned char*)&hash2);
+    return hash2;
+}
+
+
+
+
 template<typename T>
 uint256 SerializeHash(const T& obj, int nType = SER_GETHASH, int nVersion = VERSION)
 {
@@ -58,3 +79,6 @@ uint256 SerializeHash(const T& obj, int nType = SER_GETHASH, int nVersion = VERS
     ss << obj;
     return Hash(ss.begin(), ss.end());
 }
+
+
+bool error(const char* format, ...);

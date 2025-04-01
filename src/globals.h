@@ -161,8 +161,8 @@
 		
 		///
 
-		//bool IsMine() const;
-		//int64 GetDebit() const; TODO: 
+		bool IsMine() const;
+		int64 GetDebit() const;
 
 	};
 
@@ -350,6 +350,165 @@
 			}
 			return fNewer;
 		}
+
+		bool IsCoinBase() const
+		{
+			return (vin.size() == 1 && vin[0].prevout.IsNull());
+		}
+
+		bool CheckTransaction() const
+		{
+			// Basic checks that don't depend on any context
+			if (vin.empty() || vout.empty())
+			{
+				return error("CTransaction::CheckTransaction() : vin or vout empty");
+			}
+			
+			// Check for negative values
+			for (const CTxOut& txout: vout)
+			{
+				if (txout.nValue < 0)
+				{
+					return error("CTransaction::CheckTransaction() : txout.nValue negative");
+				}
+			}
+
+			if (IsCoinBase())
+			{
+				if (vin[0].scriptSig.size() < 2 || vin[0].scriptSig.size() > 100)
+				{
+					return error("CTransaction::CheckTransaction() : coinbase script size");
+				}
+			}
+			else
+			{
+				for (const CTxIn& txin : vin)
+				{
+					if (txin.prevout.IsNull())
+					{
+						return error("CTransaction::CheckTransaction() : prevout is null");
+					}
+				}
+			}
+			return true;
+		}
+
+		bool IsMine() const
+		{
+			for (const CTxOut& txout : vout)
+			{
+				if (txout.IsMine())
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		int64 GetDebit() const
+		{
+			int64 nDebit = 0;
+			for (const CTxIn& txin : vin)
+			{
+				nDebit += txin.GetDebit();
+			}
+			return nDebit;
+		}
+
+		int64 GetCredit() const
+		{
+			int64 nCredit = 0;
+			for (const CTxOut& txout : vout)
+			{
+				nCredit += txout.GetCredit();
+			}
+			return nCredit;
+		}
+
+		int64 GetValueOut() const
+		{
+			int64 nValueOut = 0;
+			for (const CTxOut& txout : vout)
+			{
+				if (txout.nValue > 0)
+				{
+					throw std::runtime_error("CTransaction::GetValueOut() : negative value");
+				}
+				nValueOut += txout.nValue;
+				nValueOut += txout.nValue;
+			}
+			return nValueOut;
+		}
+
+		// TODO: experiment with 10% fee
+		// try to use Value out * 0.1 (txout.nValue) * 0.1
+		// this after actual debugging
+		int64 GetMinFee(bool fDiscount = false) const
+		{
+			// Base fee 
+			// right now it is 1 cent per kilobyte
+			unsigned int nBytes = ::GetSerializeSize(*this, SER_NETWORK);
+			int64 nMinFee = (1 + (int64)nBytes / 1000) * CENT;
+
+			// First 100 transaction in a block are free]
+			if (fDiscount && nBytes < 10000)
+			{
+				nMinFee = 0;
+			}
+
+			// To limit dust spam, require a 0.01 fee if any output is less than 
+			if (nMinFee < CENT)
+			{
+				for (const CTxOut& txout : vout)
+				{
+					if (txout.nValue < CENT)
+					{
+						nMinFee = CENT;
+					}
+				}
+			}
+			return nMinFee;
+		}
+
+		//bool ReadFromDisk(CDiskTxPos pos, FILE** pfileRet = NULL)
+		//{
+		//	CAutoFile filein = 1; // TODO ING: CAUTOFILE in serialize
+		//}
+
+		friend bool operator==(const CTransaction& a, const CTransaction& b)
+		{
+			return (a.nVersion == b.nVersion &&
+				a.vin == b.vin &&
+				a.vout == b.vout &&
+				a.nLockTime == b.nLockTime);
+		}
+
+		friend bool operator!=(const CTransaction& a, const CTransaction& b)
+		{
+			return !(a == b);
+		}
+
+
+		std::string ToString() const
+		{
+			std::string str;
+			str += strprintf("CTransaction(hash=%s, ver=%d, vin.size=%d, vout.size=%d, nLockTime=%d)\n",
+				GetHash().ToString().substr(0, 6).c_str(),
+				nVersion,
+				vin.size(),
+				vout.size(),
+				nLockTime);
+			for (int i = 0; i < vin.size(); i++)
+				str += "    " + vin[i].ToString() + "\n";
+			for (int i = 0; i < vout.size(); i++)
+				str += "    " + vout[i].ToString() + "\n";
+			return str;
+		}
+
+		void print() const
+		{
+			printf("%s", ToString().c_str());
+		}
 	};
 
 
@@ -381,24 +540,22 @@
 		// memory only
 		mutable std::vector<uint256> vMerkleTree;
 
+		IMPLEMENT_SERIALIZE
+		(
+			READWRITE(this->nVersion);
+			nVersion = this->nVersion;
+			READWRITE(hashPrevBlock);
+			READWRITE(hashMerkleRoot);
+			READWRITE(nTime);
+			READWRITE(nBits);
+			READWRITE(nNonce);
 
-
-		//IMPLEMENT_SERIALIZE
-		//(
-		//	READWRITE(this->nVersion);
-		//	nVersion = this->nVersion;
-		//	READWRITE(hashPrevBlock);
-		//	READWRITE(hashMerkleRoot);
-		//	READWRITE(nTime);
-		//	READWRITE(nBits);
-		//	READWRITE(nNonce);
-
-		//	// ConnectBlock depends on vtx being last so it can calculate offset
-		//	if (!(nType & (SER_GETHASH | SER_BLOCKHEADERONLY)))
-		//		READWRITE(vtx);
-		//	else if (fRead)
-		//		const_cast<CBlock*>(this)->vtx.clear();
-		//)
+			// ConnectBlock depends on vtx being last so it can calculate offset
+			if (!(nType & (SER_GETHASH | SER_BLOCKHEADERONLY)))
+				READWRITE(vtx);
+			else if (fRead)
+				const_cast<CBlock*>(this)->vtx.clear();
+			)
 
 		CBlock()
 		{
@@ -416,5 +573,79 @@
 			vtx.clear();
 			vMerkleTree.clear();
 		}
+
+		bool IsNull() const
+		{
+			return (nBits == 0);
+		}
+
+		uint256 GetHash() const
+		{
+			return Hash(BEGIN(nVersion), END(nNonce));
+		}
+
+		uint256 BuildMerkleTree() const
+		{
+			vMerkleTree.clear();
+			for (const CTransaction& tx : vtx)
+			{
+				vMerkleTree.push_back(tx.GetHash());
+			}
+			int j = 0;
+			for (int nSize = vtx.size(); nSize > 1; nSize = (nSize + 1) / 2)
+			{
+				for (int i = 0; i < nSize; i += 2)
+				{
+					int i2 = std::min(i + 1, nSize - 1);
+					vMerkleTree.push_back(Hash(BEGIN(vMerkleTree[j + i]), END(vMerkleTree[j + i]),
+						BEGIN(vMerkleTree[j + i2]), END(vMerkleTree[j + i2])));
+				}
+				j += nSize;
+			}
+			return (vMerkleTree.empty() ? 0 : vMerkleTree.back());
+		}
+
+		std::vector<uint256> GetMerkleBranch(int nIndex) const
+		{
+			if (vMerkleTree.empty())
+				BuildMerkleTree();
+			std::vector<uint256> vMerkleBranch;
+			int j = 0;
+			for (int nSize = vtx.size(); nSize > 1; nSize = (nSize + 1) / 2)
+			{
+				int i = std::min(nIndex ^ 1, nSize - 1);
+				vMerkleBranch.push_back(vMerkleTree[j + i]);
+				nIndex >>= 1;
+				j += nSize;
+			}
+			return vMerkleBranch;
+		}
+
+		/// <summary>
+		///  Printing
+		/// </summary>
+		void print() const
+		{
+			printf("CBlock(hash=%s, ver=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%d)\n",
+				GetHash().ToString().substr(0, 14).c_str(),
+				nVersion,
+				hashPrevBlock.ToString().substr(0, 14).c_str(),
+				hashMerkleRoot.ToString().substr(0, 6).c_str(),
+				nTime, nBits, nNonce,
+				vtx.size());
+			for (int i = 0; i < vtx.size(); i++)
+			{
+				printf("  ");
+				vtx[i].print();
+			}
+			printf("  vMerkleTree: ");
+			for (int i = 0; i < vMerkleTree.size(); i++)
+				printf("%s ", vMerkleTree[i].ToString().substr(0, 6).c_str());
+			printf("\n");
+		}
+		
+
+
+
 	};
 //}

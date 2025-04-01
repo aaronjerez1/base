@@ -77,3 +77,20 @@ std::string strprintf(const char* format, ...)
     va_end(args);
     return result;
 }
+
+bool error(const char* format, ...)
+{
+    char buffer[50000];
+    int limit = sizeof(buffer);
+    va_list arg_ptr;
+    va_start(arg_ptr, format);
+    int ret = vsnprintf(buffer, limit, format, arg_ptr);
+    va_end(arg_ptr);
+    if (ret < 0 || ret >= limit)
+    {
+        ret = limit - 1;
+        buffer[limit - 1] = 0;
+    }
+    printf("ERROR: %s\n", buffer);
+    return false;
+}
