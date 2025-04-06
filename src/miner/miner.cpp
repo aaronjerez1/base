@@ -90,7 +90,11 @@ void CoinMiner() {
 
         // Collect the latest transactions into the block
         int64 nFees = 0;
-        //CRITICAL_BLOCK(cs_main);
+        CRITICAL_BLOCK(cs_main)
+        CRITICAL_BLOCK(cs_mapTransactions)
+        {
+            // TODO: databaseTIME !!!!!
+        }
     
     }
     

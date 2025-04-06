@@ -3,6 +3,7 @@
 
 
 
+
 int fGenerateBasecoins = 1; // hehe
 unsigned int nTransactionsUpdated = 0;
 const unsigned int MAX_SIZE = 0x02000000;
@@ -16,6 +17,11 @@ const CBigNum bnProofOfWorkLimit(~uint256(0) >> 32);
 
 
 int nBestHeight = -1;
+
+
+
+CCriticalSection cs_main;
+CCriticalSection cs_mapTransactions;
 
 std::string strSetDataDir;
 

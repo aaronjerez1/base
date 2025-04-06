@@ -25,6 +25,11 @@ extern int nBestHeight;
 extern CBlockIndex* pindexBest;
 
 
+extern CCriticalSection cs_main;
+extern CCriticalSection cs_mapTransactions;
+
+
+
 FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode = "rb");
 FILE* AppendBlockFile(unsigned int& nFileRet);
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast);
