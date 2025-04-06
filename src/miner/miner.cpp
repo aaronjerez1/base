@@ -50,6 +50,7 @@ void CoinMiner() {
     CKey key;
     key.MakeNewKey();
     CBigNum bnExtraNonce = 0;
+
     while (fGenerateBasecoins)
     {
         //    //Sleep(50);  //TODO: net.h/cpp 
@@ -61,7 +62,26 @@ void CoinMiner() {
         //    //}
 
         unsigned int nTransactionsUpdatedLast = nTransactionsUpdated;
-            //CBlockIndex* pindexPrev = pindexBest;
+        CBlockIndex* pindexPrev = pindexBest;
+        unsigned int nBits = GetNextWorkRequired(pindexPrev);
+        
+        //
+        // Create coinbase tx
+        //
+        CTransaction txNew;
+        txNew.vin.resize(1);
+        txNew.vin[0].prevout.SetNull();
+        txNew.vin[0].scriptSig << nBits << ++bnExtraNonce;
+        txNew.vout.resize(1);
+        txNew.vout[0].scriptPubKey << key.GetPubKey() << OP_CHECKSIG;
+
+
+        //
+        // Create new block
+        //
+        std::unique_ptr
+        
+    
     }
     
 

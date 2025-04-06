@@ -11,6 +11,7 @@ add_subdirectory(miner)
 add_subdirectory(database)
 add_subdirectory(script)
 add_subdirectory(shared)
+add_subdirectory(network)
 
 
 find_package(OpenSSL REQUIRED)
@@ -22,6 +23,7 @@ add_executable(base
     ${DB_SOURCES}
     ${SHARED_SOURCES}
     ${SCRIPT_SOURCES}
+    ${NET_SOURCES}
 )
 target_link_libraries(base PRIVATE OpenSSL::SSL)
 target_link_libraries(base PRIVATE OpenSSL::Crypto)
@@ -35,6 +37,7 @@ target_include_directories(base PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/db/walletdb
     ${CMAKE_CURRENT_SOURCE_DIR}/shared
     ${CMAKE_CURRENT_SOURCE_DIR}/script
+    ${CMAKE_CURRENT_SOURCE_DIR}/net
 )
 
 #target_precompile_headers(base PRIVATE pch.h)

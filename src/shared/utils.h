@@ -5,6 +5,7 @@
 #include "uint256.h"
 #include <openssl/sha.h>
 
+#define loop                for (;;)
 #define BEGIN(a)            ((char*)&(a))
 #define END(a)              ((char*)&((&(a))[1]))
 
