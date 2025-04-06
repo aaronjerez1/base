@@ -11,6 +11,8 @@
 
 
 std::string strprintf(const char* format, ...);
+bool error(const char* format, ...);
+
 
 template<typename T>
 std::string HexStr(const T itbegin, const T itend, bool fSpaces = true)
@@ -82,4 +84,117 @@ uint256 SerializeHash(const T& obj, int nType = SER_GETHASH, int nVersion = VERS
 }
 
 
-bool error(const char* format, ...);
+
+
+
+
+// Modern replacement for CCriticalSection using std::mutex
+class CCriticalSection
+{
+protected:
+    std::mutex mutex;
+public:
+    std::string sourceFile;
+    int sourceLine = 0;
+
+    CCriticalSection() = default;
+    ~CCriticalSection() = default;
+
+    void Enter() { mutex.lock(); }
+    void Leave() { mutex.unlock(); }
+    bool TryEnter() { return mutex.try_lock(); }
+
+    // Get underlying mutex for advanced usage
+    std::mutex& get_mutex() { return mutex; }
+};
+
+class CCriticalBlock
+{
+protected:
+    std::mutex* pMutex;
+    CCriticalSection* pCritSection = nullptr;
+
+public:
+    CCriticalBlock(std::mutex& mutexIn) : pMutex(&mutexIn) {
+        pMutex->lock();
+    }
+
+    CCriticalBlock(CCriticalSection& csIn) : pMutex(&csIn.get_mutex()), pCritSection(&csIn) {
+        pMutex->lock();
+    }
+
+    ~CCriticalBlock() {
+        pMutex->unlock();
+        if (pCritSection) {
+            pCritSection->sourceFile = "";
+            pCritSection->sourceLine = 0;
+        }
+    }
+
+    // Disallow copying and moving
+    CCriticalBlock(const CCriticalBlock&) = delete;
+    CCriticalBlock& operator=(const CCriticalBlock&) = delete;
+    CCriticalBlock(CCriticalBlock&&) = delete;
+    CCriticalBlock& operator=(CCriticalBlock&&) = delete;
+};
+
+// Try-lock version of CCriticalBlock
+class CTryCriticalBlock
+{
+protected:
+    std::mutex* pMutex = nullptr;
+    CCriticalSection* pCritSection = nullptr;
+    bool entered = false;
+
+public:
+    CTryCriticalBlock(std::mutex& mutexIn) {
+        entered = mutexIn.try_lock();
+        if (entered) pMutex = &mutexIn;
+    }
+
+    CTryCriticalBlock(CCriticalSection& csIn) {
+        entered = csIn.get_mutex().try_lock();
+        if (entered) {
+            pMutex = &csIn.get_mutex();
+            pCritSection = &csIn;
+        }
+    }
+
+    ~CTryCriticalBlock() {
+        if (entered) {
+            pMutex->unlock();
+            if (pCritSection) {
+                pCritSection->sourceFile = "";
+                pCritSection->sourceLine = 0;
+            }
+        }
+    }
+
+    bool Entered() const { return entered; }
+
+    // Disallow copying and moving
+    CTryCriticalBlock(const CTryCriticalBlock&) = delete;
+    CTryCriticalBlock& operator=(const CTryCriticalBlock&) = delete;
+    CTryCriticalBlock(CTryCriticalBlock&&) = delete;
+    CTryCriticalBlock& operator=(CTryCriticalBlock&&) = delete;
+};
+
+// Modern version of CRITICAL_BLOCK macro with source location tracking
+#define CRITICAL_BLOCK(cs)                                                    \
+    for (bool fcriticalblockonce = true; fcriticalblockonce;                   \
+         assert(("break caught by CRITICAL_BLOCK!", !fcriticalblockonce)),     \
+         fcriticalblockonce = false)                                           \
+    for (CCriticalBlock criticalblock(cs);                                     \
+         fcriticalblockonce &&                                                 \
+         (cs.sourceFile = __FILE__, cs.sourceLine = __LINE__, true);           \
+         fcriticalblockonce = false, cs.sourceFile = "", cs.sourceLine = 0)
+
+// Modern version of TRY_CRITICAL_BLOCK macro with source location tracking
+#define TRY_CRITICAL_BLOCK(cs)                                                \
+    for (bool fcriticalblockonce = true; fcriticalblockonce;                   \
+         assert(("break caught by TRY_CRITICAL_BLOCK!", !fcriticalblockonce)), \
+         fcriticalblockonce = false)                                           \
+    for (CTryCriticalBlock criticalblock(cs);                                  \
+         fcriticalblockonce && criticalblock.Entered() &&                      \
+         (cs.sourceFile = __FILE__, cs.sourceLine = __LINE__, true);           \
+         fcriticalblockonce = false, cs.sourceFile = "", cs.sourceLine = 0)

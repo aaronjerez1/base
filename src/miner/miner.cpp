@@ -79,8 +79,18 @@ void CoinMiner() {
         //
         // Create new block
         //
-        std::unique_ptr
-        
+        std::unique_ptr<CBlock> pblock(new CBlock());
+        if (!pblock.get())
+        {
+            std::runtime_error("ERROR");
+        }
+
+        // add our coinbase tx as first trasaction
+        pblock->vtx.push_back(txNew);
+
+        // Collect the latest transactions into the block
+        int64 nFees = 0;
+        //CRITICAL_BLOCK(cs_main);
     
     }
     
