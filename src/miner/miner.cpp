@@ -1,6 +1,6 @@
 #include <iostream>
 
-
+#include <algorithm>
 #include <pthread.h>
 #include <sched.h>
 #include <unistd.h>
@@ -8,6 +8,8 @@
 #include "../shared/key.h"
 #include "../shared/bignum.h"
 #include "../globals.h"
+//#include "../database/transactiondb/transactiondb.h"
+//#include <transactiondb/transactiondb.h>
 
 //#include "../shared/uint256.h"
 //#include "../shared/bignum.h"
@@ -94,6 +96,40 @@ void CoinMiner() {
         CRITICAL_BLOCK(cs_mapTransactions)
         {
             // TODO: databaseTIME !!!!!
+            CTxDB txdb("r");
+            std::map<uint256, CTxIndex> mapTestPool;
+            std::vector<char> vfAlreadyAdded(mapTransactions.size());
+            bool fFoundSomething = true;
+            unsigned int nBlockSize = 0;
+            while (fFoundSomething && nBlockSize < MAX_SIZE / 2)
+            {
+                fFoundSomething = false;
+                unsigned int n = 0;
+                for (std::map<uint256, CTransaction>::iterator mi = mapTransactions.begin(); mi != mapTransactions.end(); ++mi, ++n)
+                {
+                    if (vfAlreadyAdded[n]) {
+                        continue;
+                    }
+                    //CTransaction& tx = (*mi).second;
+                    //if (tx.IsCoinBase() || !tx.IsFinal())
+                    //{
+                    //    continue;
+                    //}
+
+                    // TODO: tithe
+                    // Trasacton fee requirements, mainly only needed for flood control
+                    // Under 10k (about 80 inputs) is free for first 100 transactions
+                    // Base rate is 0.01 per KB
+                    //int64 nMinFee = tx.GetMinFee(pblock->vtx.size() < 100);
+
+                    //std::map<uint256, CTxIndex> mapTestPoolTmp(mapTestPool);
+                    //if (!tx.ConnectInputs(txdb, mapTestPoolTmp, CDiskTxPos(1, 1, 1), 0, nFees, false, true, nMinFee))
+                    //{
+                    //    continue;
+                    //}
+                    //std::swap(mapTestPool, mapTestPoolTmp);
+                }
+            }
         }
     
     }

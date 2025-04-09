@@ -4,15 +4,21 @@
 #include "shared/utils.h"
 #include "script/script.h"
 #include "network/net.h"
+#include "database/db.h"
 #include <algorithm>
 
 class CBlockIndex;
-
+class CTransaction;
+class CTxDB;
+class CTxIndex;
 //string GetAppDir();
 
 
 extern int fGenerateBasecoins;
 extern unsigned int nTransactionsUpdated;
+extern bool fDbEnvInit;
+extern std::map<uint256, CTransaction> mapTransactions;
+
 
 extern const unsigned int MAX_SIZE;
 extern const int64 COIN;
@@ -20,13 +26,25 @@ extern const int64 CENT;
 extern const int COINBASE_MATURITY;
 
 extern const CBigNum bnProofOfWorkLimit;
+extern const uint256 hashGenesisBlock;
+extern uint256 hashBestChain;
 
 extern int nBestHeight;
 extern CBlockIndex* pindexBest;
 
+extern std::map<uint256, CBlockIndex*> mapBlockIndex;
+extern CBlockIndex* pindexGenesisBlock;
+
 
 extern CCriticalSection cs_main;
 extern CCriticalSection cs_mapTransactions;
+extern CCriticalSection cs_db;
+
+extern std::map<std::string, int> mapFileUseCount;
+extern std::map<string, string> mapAddressBook;
+
+
+
 
 
 
@@ -40,10 +58,11 @@ public:
 	unsigned int nFile;
 	unsigned int nBlockPos;
 	unsigned int nTxPos;
+	IMPLEMENT_SERIALIZE(READWRITE(FLATDATA(*this));)
 
 	CDiskTxPos()
 	{
-		//SetNull();
+		SetNull();
 	}
 	CDiskTxPos(unsigned int nFileIn, unsigned int nBlockPosIn, unsigned int nTxPosIn)
 	{
@@ -51,8 +70,35 @@ public:
 		nBlockPos = nBlockPosIn;
 		nTxPos = nTxPosIn;
 	}
-	//IMPLEMENT_SERIALIZE(READWRITE(FLATDATA(*this));)
 	void SetNull() { nFile = -1; nBlockPos = 0; nTxPos = 0; }
+	bool IsNull() const { return (nFile == -1); }
+
+
+	friend bool operator==(const CDiskTxPos& a, const CDiskTxPos& b)
+	{
+		return (a.nFile == b.nFile &&
+			a.nBlockPos == b.nBlockPos &&
+			a.nTxPos == b.nTxPos);
+	}
+
+	friend bool operator!=(const CDiskTxPos& a, const CDiskTxPos& b)
+	{
+		return !(a == b);
+	}
+
+	string ToString() const
+	{
+		if (IsNull())
+			return strprintf("null");
+		else
+			return strprintf("(nFile=%d, nBlockPos=%d, nTxPos=%d)", nFile, nBlockPos, nTxPos);
+	}
+
+	void print() const
+	{
+		printf("%s", ToString().c_str());
+	}
+
 };
 
 /// <summary>
@@ -544,7 +590,7 @@ public:
 	}
 
 	//bool DisconnectInputs(CTxDB& txdb);
-	//bool ConnectInputs(CTxDB& txdb, map<uint256, CTxIndex>& mapTestPool, CDiskTxPos posThisTx, int nHeight, int64& nFees, bool fBlock, bool fMiner, int64 nMinFee = 0);
+	//bool ConnectInputs(CTxDB& txdb, std::map<uint256, CTxIndex>& mapTestPool, CDiskTxPos posThisTx, int nHeight, int64& nFees, bool fBlock, bool fMiner, int64 nMinFee);
 	//bool ClientConnectInputs();
 
 	//bool AcceptTransaction(CTxDB& txdb, bool fCheckInputs = true, bool* pfMissingInputs = NULL);
@@ -614,14 +660,146 @@ public:
 	}
 
 	//int SetMerkleBranch(const CBlock* pblock = NULL);
-	//int GetDepthInMainChain() const;
-	//bool IsInMainChain() const { return GetDepthInMainChain() > 0; }
+	int GetDepthInMainChain() const;
+	bool IsInMainChain() const { return GetDepthInMainChain() > 0; }
 	int GetBlocksToMaturity() const;
 	//bool AcceptTransaction(CTxDB& txdb, bool fCheckInputs = true);
 	//bool AcceptTransaction() { CTxDB txdb("r"); return AcceptTransaction(txdb); }
 };
 
 
+//
+// A transaction with a bunch of additional info that only the owner cares about.
+// It inlcudes any unrecorded transaction needed to link it back
+// to the block chain. TODO: INCOMPLETE DUE TO CIRCULAR DEPENDENCY
+//
+class CWalletTx : public CMerkleTx
+{
+public:
+	std::vector<CMerkleTx> vtxPrev;
+	std::map<std::string, std::string> mapValue;
+	std::vector<std::pair<std::string, std::string>> vOrderForm;
+	unsigned int fTimeReceivedIsTxTime;
+	unsigned int nTimeReceived;
+	char fFromMe;
+	char fSpent;
+
+	// memory only
+	mutable unsigned int nTimeDisplayed;
+
+
+	IMPLEMENT_SERIALIZE
+	(
+		nSerSize += SerReadWrite(s, *(CMerkleTx*)this, nType, nVersion, ser_action);
+		nVersion = this->nVersion;
+		READWRITE(vtxPrev);
+		READWRITE(mapValue);
+		READWRITE(vOrderForm);
+		READWRITE(fTimeReceivedIsTxTime);
+		READWRITE(nTimeReceived);
+		READWRITE(fFromMe);
+		READWRITE(fSpent);
+	)
+
+	void Init()
+	{
+		fTimeReceivedIsTxTime = false;
+		nTimeReceived = 0;
+		fFromMe = false;
+		fSpent = false;
+		nTimeDisplayed = 0;
+	}
+
+	CWalletTx()
+	{
+		Init();
+	}
+
+	CWalletTx(const CMerkleTx& txIn) : CMerkleTx(txIn)
+	{
+		Init();
+	}
+
+	CWalletTx(const CTransaction& txIn) : CMerkleTx(txIn)
+	{
+		Init();
+	}
+
+
+	//bool WriteToDisk()
+	//{
+	//	return CWalletDB().WriteTx(GetHash(), *this);
+	//} // TODO: walletdb?? but this file is used by the db...
+
+	//int64 GetTxTime() const;
+	//void AddSupportingTransactions(CTxDB& txdb);
+
+	//bool AcceptWalletTransaction(CTxDB& txdb, bool fCheckInputs = true);
+	//bool AcceptWalletTransaction() { CTxDB txdb("r"); return AcceptWalletTransaction(txdb); }
+
+	//void RelayWalletTransaction(CTxDB& txdb);
+	//void RelayWalletTransaction() { CTxDB txdb("r"); RelayWalletTransaction(txdb); }
+
+};
+
+//
+// A txdb record that cotains the disk location of a transaction and the
+// locations of the transactions that spend its ouputs. 
+// vSpent is really only used as a flag, but having the locaiton is very helpful for debugging.
+//
+class CTxIndex
+{
+public:
+	CDiskTxPos pos;
+	std::vector<CDiskTxPos> vSpent;
+
+	IMPLEMENT_SERIALIZE
+	(
+		if (!(nType & SER_GETHASH))
+			READWRITE(nVersion);
+		READWRITE(pos);
+		READWRITE(vSpent);
+	)
+
+	CTxIndex()
+	{
+		SetNull();
+	}
+
+	CTxIndex(const CDiskTxPos& posIn, unsigned int nOutputs)
+	{
+		pos = posIn;
+		vSpent.resize(nOutputs);
+	}
+
+	void SetNull()
+	{
+		pos.SetNull();
+		vSpent.clear();
+	}
+
+	bool IsNull()
+	{
+		return pos.IsNull();
+	}
+
+
+	friend bool operator==(const CTxIndex& a, const CTxIndex& b)
+	{
+		if (a.pos != b.pos || a.vSpent.size() != b.vSpent.size())
+			return false;
+		for (int i = 0; i < a.vSpent.size(); i++)
+			if (a.vSpent[i] != b.vSpent[i])
+				return false;
+		return true;
+	}
+
+	friend bool operator!=(const CTxIndex& a, const CTxIndex& b)
+	{
+		return !(a == b);
+	}
+
+};
 
 
 
@@ -967,4 +1145,106 @@ public:
 	{
 		printf("%s\n", ToString().c_str());
 	}
+};
+
+
+
+//
+// Used to marshal pointers into hashes for db storage
+//
+
+class CDiskBlockIndex : public CBlockIndex
+{
+public:
+	uint256 hashPrev;
+	uint256 hashNext;
+
+
+	IMPLEMENT_SERIALIZE
+	(
+		if (!(nType & SER_GETHASH))
+			READWRITE(nVersion);
+
+		READWRITE(hashNext);
+		READWRITE(nFile);
+		READWRITE(nBlockPos);
+		READWRITE(nHeight);
+
+		// block header
+		READWRITE(this->nVersion);
+		READWRITE(hashPrev);
+		READWRITE(hashMerkleRoot);
+		//READWRITE(hashContextMerkleRoot);
+		READWRITE(nTime);
+		READWRITE(nBits);
+		READWRITE(nNonce);
+	)
+
+	CDiskBlockIndex()
+	{
+		hashPrev = 0;
+		hashNext = 0;
+	}
+	explicit CDiskBlockIndex(CBlockIndex* pindex) : CBlockIndex(*pindex)
+	{
+		hashPrev = (pprev ? pprev->GetBlockHash() : 0);
+		hashNext = (pnext ? pnext->GetBlockHash() : 0);
+	}
+
+	uint256 GetBlockHash() const
+	{
+		CBlock block;
+		block.nVersion = nVersion;
+		block.hashPrevBlock = hashPrev;
+		block.hashMerkleRoot = hashMerkleRoot;
+		block.nTime = nTime;
+		block.nBits = nBits;
+		block.nNonce = nNonce;
+		return block.GetHash();
+	}
+
+	string ToString() const
+	{
+		string str = "CDiskBlockIndex(";
+		str += CBlockIndex::ToString();
+		str += strprintf("\n                hashBlock=%s, hashPrev=%s, hashNext=%s)",
+			GetBlockHash().ToString().c_str(),
+			hashPrev.ToString().substr(0, 14).c_str(),
+			hashNext.ToString().substr(0, 14).c_str());
+		return str;
+	}
+
+	void print() const
+	{
+		printf("%s\n", ToString().c_str());
+	}
+};
+
+////
+// CTxDB
+////
+
+
+class CTxDB : public CDB {
+public:
+	CTxDB(const char* pszMode = "r+", bool fTxn = false) : CDB(!fClient ? "blkindex.base" : nullptr, fTxn) {}
+
+	bool ReadTxIndex(uint256 hash, CTxIndex& txindex);
+	bool UpdateTxIndex(uint256 hash, const CTxIndex& txindex);
+	bool AddTxIndex(const CTransaction& tx, const CDiskTxPos& pos, int nHeight);
+	bool EraseTxIndex(const CTransaction& tx);
+	bool ContainsTx(uint256 hash);
+	bool ReadOwnerTxes(uint160 hash160, int nHeight, vector<CTransaction>& vtx);
+	bool ReadDiskTx(uint256 hash, CTransaction& tx, CTxIndex& txindex);
+	bool ReadDiskTx(uint256 hash, CTransaction& tx);
+	bool ReadDiskTx(COutPoint outpoint, CTransaction& tx, CTxIndex& txindex);
+	bool ReadDiskTx(COutPoint outpoint, CTransaction& tx);
+	bool WriteBlockIndex(const CDiskBlockIndex& blockindex);
+	bool EraseBlockIndex(uint256 hash);
+	bool ReadHashBestChain(uint256& hashBestChain);
+	bool WriteHashBestChain(uint256 hashBestChain);
+	/*   bool WriteModelHeader(const GPT2* model);
+	   bool WriteModelParameters(const GPT2* model);*/
+	bool LoadBlockIndex();
+	//bool LoadGPT2(GPT2* model);
 };

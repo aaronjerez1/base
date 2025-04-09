@@ -63,6 +63,42 @@ inline unsigned int GetSerializeSize(bool a, int, int = 0) { return sizeof(char)
 template<typename Stream> inline void Serialize(Stream& s, bool a, int, int = 0) { char f = a; WRITEDATA(s, f); }
 template<typename Stream> inline void Unserialize(Stream& s, bool& a, int, int = 0) { char f; READDATA(s, f); a = f; }
 
+//
+// Forward declarations
+// Necessary for the various combinations and compositions of data types at moment of serialization. coupld be a map of pairs  or a pairs of maps, etc etc.
+
+// string
+template<typename C> unsigned int GetSerializeSize(const std::basic_string<C>& str, int, int = 0);
+template<typename Stream, typename C> void Serialize(Stream& os, const std::basic_string<C>& str, int, int = 0);
+template<typename Stream, typename C> void Unserialize(Stream& is, std::basic_string<C>& str, int, int = 0);
+
+// vector
+template<typename T, typename A> unsigned int GetSerializeSize_impl(const std::vector<T, A>& v, int nType, int nVersion, const std::true_type&);
+template<typename T, typename A> unsigned int GetSerializeSize_impl(const std::vector<T, A>& v, int nType, int nVersion, const std::false_type&);
+template<typename T, typename A> inline unsigned int GetSerializeSize(const std::vector<T, A>& v, int nType, int nVersion = VERSION);
+template<typename Stream, typename T, typename A> void Serialize_impl(Stream& os, const std::vector<T, A>& v, int nType, int nVersion, const std::true_type&);
+template<typename Stream, typename T, typename A> void Serialize_impl(Stream& os, const std::vector<T, A>& v, int nType, int nVersion, const std::false_type&);
+template<typename Stream, typename T, typename A> inline void Serialize(Stream& os, const std::vector<T, A>& v, int nType, int nVersion = VERSION);
+template<typename Stream, typename T, typename A> void Unserialize_impl(Stream& is, std::vector<T, A>& v, int nType, int nVersion, const std::true_type&);
+template<typename Stream, typename T, typename A> void Unserialize_impl(Stream& is, std::vector<T, A>& v, int nType, int nVersion, const std::false_type&);
+template<typename Stream, typename T, typename A> inline void Unserialize(Stream& is, std::vector<T, A>& v, int nType, int nVersion = VERSION);
+
+
+// pair
+template<typename K, typename T> unsigned int GetSerializeSize(const std::pair<K, T>& item, int nType, int nVersion = VERSION);
+template<typename Stream, typename K, typename T> void Serialize(Stream& os, const std::pair<K, T>& item, int nType, int nVersion = VERSION);
+template<typename Stream, typename K, typename T> void Unserialize(Stream& is, std::pair<K, T>& item, int nType, int nVersion = VERSION);
+
+// map
+template<typename K, typename T, typename Pred, typename A> unsigned int GetSerializeSize(const std::map<K, T, Pred, A>& m, int nType, int nVersion = VERSION);
+template<typename Stream, typename K, typename T, typename Pred, typename A> void Serialize(Stream& os, const std::map<K, T, Pred, A>& m, int nType, int nVersion = VERSION);
+template<typename Stream, typename K, typename T, typename Pred, typename A> void Unserialize(Stream& is, std::map<K, T, Pred, A>& m, int nType, int nVersion = VERSION);
+
+// set
+template<typename K, typename Pred, typename A> unsigned int GetSerializeSize(const std::set<K, Pred, A>& m, int nType, int nVersion = VERSION);
+template<typename Stream, typename K, typename Pred, typename A> void Serialize(Stream& os, const std::set<K, Pred, A>& m, int nType, int nVersion = VERSION);
+template<typename Stream, typename K, typename Pred, typename A> void Unserialize(Stream& is, std::set<K, Pred, A>& m, int nType, int nVersion = VERSION);
+
 
 
 //
@@ -533,6 +569,11 @@ public:
     }
 
     CDataStream(const_iterator pbegin, const_iterator pend, int nTypeIn = 0, int nVersionIn = VERSION) : vch(pbegin, pend)
+    {
+        Init(nTypeIn, nVersionIn);
+    }
+
+    CDataStream(const char* pbegin, const char* pend, int nTypeIn = 0, int nVersionIn = VERSION) : vch(pbegin, pend)
     {
         Init(nTypeIn, nVersionIn);
     }

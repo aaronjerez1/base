@@ -39,3 +39,17 @@ void MakeSameSize(valtype& vch1, valtype& vch2)
 //bool EvalScript(const CScript& script, const C) // TODO: wait let's proceed with the construction of the globlas. get got what we need.
 
 
+//bool VerifySignature(const CTransaction& txFrom, const CTransaction& txTo, unsigned int nIn, int nHashType)
+//{
+//    assert(nIn < txTo.vin.size());
+//    const CTxIn& txin = txTo.vin[nIn];
+//    if (txin.prevout.n >= txFrom.vout.size())
+//        return false;
+//    const CTxOut& txout = txFrom.vout[txin.prevout.n];
+//
+//    if (txin.prevout.hash != txFrom.GetHash())
+//        return false;
+//
+//    return EvalScript(txin.scriptSig + CScript(OP_CODESEPARATOR) + txout.scriptPubKey, txTo, nIn, nHashType);
+//}
+

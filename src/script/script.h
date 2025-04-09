@@ -558,3 +558,5 @@ public:
         printf("%s\n", ToString().c_str());
     }
 };
+
+//bool VerifySignature(const CTransaction& txFrom, const CTransaction& txTo, unsigned int nIn, int nHashType = 0);
