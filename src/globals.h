@@ -11,6 +11,7 @@ class CBlockIndex;
 class CTransaction;
 class CTxDB;
 class CTxIndex;
+class CDiskTxPos;
 //string GetAppDir();
 
 
@@ -590,7 +591,7 @@ public:
 	}
 
 	//bool DisconnectInputs(CTxDB& txdb);
-	//bool ConnectInputs(CTxDB& txdb, std::map<uint256, CTxIndex>& mapTestPool, CDiskTxPos posThisTx, int nHeight, int64& nFees, bool fBlock, bool fMiner, int64 nMinFee);
+	bool ConnectInputs(CTxDB& txdb, std::map<uint256, CTxIndex>& mapTestPool, CDiskTxPos posThisTx, int nHeight, int64& nFees, bool fBlock, bool fMiner, int64 nMinFee);
 	//bool ClientConnectInputs();
 
 	//bool AcceptTransaction(CTxDB& txdb, bool fCheckInputs = true, bool* pfMissingInputs = NULL);

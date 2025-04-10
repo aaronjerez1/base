@@ -110,11 +110,11 @@ void CoinMiner() {
                     if (vfAlreadyAdded[n]) {
                         continue;
                     }
-                    //CTransaction& tx = (*mi).second;
-                    //if (tx.IsCoinBase() || !tx.IsFinal())
-                    //{
-                    //    continue;
-                    //}
+                    CTransaction& tx = (*mi).second;
+                    if (tx.IsCoinBase() || !tx.IsFinal())
+                    {
+                        continue;
+                    }
 
                     // TODO: tithe
                     // Trasacton fee requirements, mainly only needed for flood control
