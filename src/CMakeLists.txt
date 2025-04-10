@@ -23,8 +23,8 @@ add_executable(base
     ${SRC_FILES}
     ${MINER_SOURCES}
     ${DB_SOURCES}
-    ${SHARED_SOURCES}
     ${SCRIPT_SOURCES}
+    ${SHARED_SOURCES}
     ${NET_SOURCES}
     ${GlOBALS_SOURCES}
 )

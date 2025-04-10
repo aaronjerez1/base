@@ -83,6 +83,19 @@ template<typename Stream, typename T, typename A> void Unserialize_impl(Stream& 
 template<typename Stream, typename T, typename A> void Unserialize_impl(Stream& is, std::vector<T, A>& v, int nType, int nVersion, const std::false_type&);
 template<typename Stream, typename T, typename A> inline void Unserialize(Stream& is, std::vector<T, A>& v, int nType, int nVersion = VERSION);
 
+//
+// others derived from vector
+// // see implementation in script/impl.h
+class CScript;
+inline unsigned int GetSerializeSize(const CScript& v, int nType, int nVersion);
+
+template<typename Stream>
+void Serialize(Stream& os, const CScript& v, int nType, int nVersion);
+
+template<typename Stream>
+void Unserialize(Stream& is, CScript& v, int nType, int nVersion);
+
+
 
 // pair
 template<typename K, typename T> unsigned int GetSerializeSize(const std::pair<K, T>& item, int nType, int nVersion = VERSION);
@@ -818,17 +831,6 @@ public:
     }
 };
 
-//
-// others derived from vector
-// // see implementation in script/impl.h
-class CScript; 
-inline unsigned int GetSerializeSize(const CScript& v, int nType, int nVersion);
-
-template<typename Stream>
-void Serialize(Stream& os, const CScript& v, int nType, int nVersion);
-
-template<typename Stream>
-void Unserialize(Stream& is, CScript& v, int nType, int nVersion);
 
 
 

@@ -1,4 +1,5 @@
 #include "script.h"
+#include "../shared/serialize.h"
 
 ////////////
 /// IMPLEMENTATIONS FOR SERIALIZED

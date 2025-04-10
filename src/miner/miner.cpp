@@ -120,9 +120,9 @@ void CoinMiner() {
                     // Trasacton fee requirements, mainly only needed for flood control
                     // Under 10k (about 80 inputs) is free for first 100 transactions
                     // Base rate is 0.01 per KB
-                    //int64 nMinFee = tx.GetMinFee(pblock->vtx.size() < 100);
+                    int64 nMinFee = tx.GetMinFee(pblock->vtx.size() < 100);
 
-                    //std::map<uint256, CTxIndex> mapTestPoolTmp(mapTestPool);
+                    std::map<uint256, CTxIndex> mapTestPoolTmp(mapTestPool);
                     //if (!tx.ConnectInputs(txdb, mapTestPoolTmp, CDiskTxPos(1, 1, 1), 0, nFees, false, true, nMinFee))
                     //{
                     //    continue;
