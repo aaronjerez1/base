@@ -8,11 +8,14 @@
 #define loop                for (;;)
 #define BEGIN(a)            ((char*)&(a))
 #define END(a)              ((char*)&((&(a))[1]))
+#define ARRAYLEN(array)     (sizeof(array)/sizeof((array)[0]))
 
 
 std::string strprintf(const char* format, ...);
 bool error(const char* format, ...);
-
+int64 GetTime();
+int64 GetAdjustedTime();
+uint64_t GetRand(uint64_t nMax);
 
 template<typename T>
 std::string HexStr(const T itbegin, const T itend, bool fSpaces = true)

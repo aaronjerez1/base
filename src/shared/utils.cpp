@@ -1,5 +1,7 @@
 #include "utils.h"
 #include <cstdarg>
+#include <openssl/rand.h>
+
 //
 //
 //
@@ -93,4 +95,31 @@ bool error(const char* format, ...)
     }
     printf("ERROR: %s\n", buffer);
     return false;
+}
+
+int64 GetTime()
+{
+    return time(NULL);
+}
+
+static int64 nTimeOffset = 0;
+
+int64 GetAdjustedTime()
+{
+    return GetTime() + nTimeOffset;
+}
+
+
+uint64_t GetRand(uint64_t nMax)
+{
+    if (nMax == 0)
+        return 0;
+    // The range of the random source must be a multiple of the modulus
+    // to give every possible output value an equal possibility
+    uint64_t nRange = (std::numeric_limits<uint64_t>::max() / nMax) * nMax;
+    uint64_t nRand = 0;
+    do
+        RAND_bytes((unsigned char*)&nRand, sizeof(nRand));
+    while (nRand >= nRange);
+    return (nRand % nMax);
 }

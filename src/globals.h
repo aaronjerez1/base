@@ -259,7 +259,7 @@ public:
 	(
 		READWRITE(nValue);
 		READWRITE(scriptPubKey);
-		)
+	)
 
 
 	CTxOut()

@@ -105,7 +105,7 @@ void CoinMiner() {
             {
                 fFoundSomething = false;
                 unsigned int n = 0;
-                for (std::map<uint256, CTransaction>::iterator mi = mapTransactions.begin(); mi != mapTransactions.end(); ++mi, ++n)
+                for (std::map<uint256, CTransaction>::iterator mi = mapTransactions.begin(); mi != mapTransactions.end(); ++mi, ++n) // ok in order to debug properly, i need to do the networking
                 {
                     if (vfAlreadyAdded[n]) {
                         continue;
@@ -123,11 +123,14 @@ void CoinMiner() {
                     int64 nMinFee = tx.GetMinFee(pblock->vtx.size() < 100);
 
                     std::map<uint256, CTxIndex> mapTestPoolTmp(mapTestPool);
-                    //if (!tx.ConnectInputs(txdb, mapTestPoolTmp, CDiskTxPos(1, 1, 1), 0, nFees, false, true, nMinFee))
-                    //{
-                    //    continue;
-                    //}
-                    //std::swap(mapTestPool, mapTestPoolTmp);
+                    if (!tx.ConnectInputs(txdb, mapTestPoolTmp, CDiskTxPos(1, 1, 1), 0, nFees, false, true, nMinFee))
+                    {
+                        continue;
+                    }
+                    int n1 = 1;
+                    int n2 = 2;
+
+                    //std::swap(n1, n2);
                 }
             }
         }
