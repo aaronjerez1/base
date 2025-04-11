@@ -5,6 +5,7 @@
 #include "../shared/utils.h"
 #include <map>
 #include <algorithm>
+#include <openssl/rand.h>
 
 static const unsigned short DEFAULT_PORT = htons(8333);
 static const unsigned int PUBLISH_HOPS = 5;
@@ -371,6 +372,21 @@ public:
 };
 
 
+
+///////////////
+///// Some Global variables
+/////////////////
+class CNode;
+
+extern std::vector<CNode*> vNodes;
+extern CCriticalSection cs_vNodes;
+extern std::map<CInv, CDataStream> mapRelay;
+extern std::deque<std::pair<int64, CInv> > vRelayExpiration;
+extern CCriticalSection cs_mapRelay;
+
+
+
+
 /////////////////
 //// CNode
 /////////////////
@@ -582,7 +598,168 @@ public:
 		}
 	}
 
+	template<typename T1>
+	void PushMessage(const char* pszCommand, const T1& a1)
+	{
+		try
+		{
+			BeginMessage(pszCommand);
+			vSend << a1;
+			EndMessage();
+		}
+		catch (...)
+		{
+			AbortMessage();
+			throw;
+		}
+	}
+
+	template<typename T1, typename T2>
+	void PushMessage(const char* pszCommand, const T1& a1, const T2& a2)
+	{
+		try
+		{
+			BeginMessage(pszCommand);
+			vSend << a1 << a2;
+			EndMessage();
+		}
+		catch (...)
+		{
+			AbortMessage();
+			throw;
+		}
+	}
+
+	template<typename T1, typename T2, typename T3>
+	void PushMessage(const char* pszCommand, const T1& a1, const T2& a2, const T3& a3)
+	{
+		try
+		{
+			BeginMessage(pszCommand);
+			vSend << a1 << a2 << a3;
+			EndMessage();
+		}
+		catch (...)
+		{
+			AbortMessage();
+			throw;
+		}
+	}
+
+	template<typename T1, typename T2, typename T3, typename T4>
+	void PushMessage(const char* pszCommand, const T1& a1, const T2& a2, const T3& a3, const T4& a4)
+	{
+		try
+		{
+			BeginMessage(pszCommand);
+			vSend << a1 << a2 << a3 << a4;
+			EndMessage();
+		}
+		catch (...)
+		{
+			AbortMessage();
+			throw;
+		}
+	}
+
+	template<typename T1>
+	void PushRequest(const char* pszCommand,
+		void (*fn)(void*, CDataStream&), void* param1)
+	{
+		uint256 hashReply;
+		RAND_bytes((unsigned char*)&hashReply, sizeof(hashReply));
+
+		CRITICAL_BLOCK(cs_mapRequests)
+			mapRequests[hashReply] = CRequestTracker(fn, param1);
+
+		PushMessage(pszCommand, hashReply);
+	}
 
 
+	template<typename T1>
+	void PushRequest(const char* pszCommand, const T1& a1,
+		void (*fn)(void*, CDataStream&), void* param1)
+	{
+		uint256 hashReply;
+		RAND_bytes((unsigned char*)&hashReply, sizeof(hashReply));
+
+		CRITICAL_BLOCK(cs_mapRequests)
+			mapRequests[hashReply] = CRequestTracker(fn, param1);
+
+		PushMessage(pszCommand, hashReply, a1);
+	}
+
+	template<typename T1, typename T2>
+	void PushRequest(const char* pszCommand, const T1& a1, const T2& a2,
+		void (*fn)(void*, CDataStream&), void* param1)
+	{
+		uint256 hashReply;
+		RAND_bytes((unsigned char*)&hashReply, sizeof(hashReply));
+
+		CRITICAL_BLOCK(cs_mapRequests)
+			mapRequests[hashReply] = CRequestTracker(fn, param1);
+
+		PushMessage(pszCommand, hashReply, a1, a2);
+	}
+
+
+
+	// TODO: implement this in net.cpp
+	bool IsSubscribed(unsigned int nChannel);
+	void Subscribe(unsigned int nChannel, unsigned int nHops = 0);
+	void CancelSubscribe(unsigned int nChannel);
+	void Disconnect();
 
 };
+
+
+
+
+
+inline void RelayInventory(const CInv& inv)
+{
+	// Put on lists to offer to the other nodes
+	CRITICAL_BLOCK(cs_vNodes)
+		for(CNode * pnode: vNodes)
+		pnode->PushInventory(inv);
+}
+
+template<typename T>
+void RelayMessage(const CInv& inv, const T& a)
+{
+	CDataStream ss(SER_NETWORK);
+	ss.reserve(10000);
+	ss << a;
+	RelayMessage(inv, ss);
+}
+
+template<>
+inline void RelayMessage<>(const CInv& inv, const CDataStream& ss)
+{
+	CRITICAL_BLOCK(cs_mapRelay)
+	{
+		// Expire old relay messages
+		while (!vRelayExpiration.empty() && vRelayExpiration.front().first < GetTime())
+		{
+			mapRelay.erase(vRelayExpiration.front().second);
+			vRelayExpiration.pop_front();
+		}
+
+		// Save original serialized message so newer versions are preserved
+		mapRelay[inv] = ss;
+		vRelayExpiration.push_back(std::make_pair(GetTime() + 15 * 60, inv));
+	}
+
+	RelayInventory(inv);
+}
+
+
+//
+// Templates for the publish and subscription system.
+// The object being publish as T& obj needs to have:
+//  a set<unsigned int> setSources member
+// specializations of AdvertInsert and AdvertErase
+// Currently implemented for CTable and CProduct.
+//
+
+/// This is for a decentralized market place. to be discussed later.
