@@ -76,3 +76,19 @@ bool ConnectSocket(const CAddress& addrConnect, int hSocketRet)
 	hSocketRet = hSocket;
 	return true;
 }
+
+bool GetMyExternalIP2(const CAddress& addrConnect, const char* pszGet, const char* pszKeyword, unsigned int& ipRet)
+{
+	int hSocket;
+	if (!ConnectSocket(addrConnect, hSocket))
+		return error("GetMyExternalIP() : connection to %s failed\n", addrConnect.ToString().c_str());
+
+	send(hSocket, pszGet, strlen(pszGet), 0);
+
+
+	string strLine;
+	//while (RecvLine(hSocket, strLine))
+	//{
+	//}
+
+}
