@@ -14,6 +14,7 @@ enum
 	NODE_NETWORK = (1 << 0),
 };
 
+extern CCriticalSection cs_mapAddresses;
 
 
 //
@@ -701,6 +702,9 @@ public:
 
 		PushMessage(pszCommand, hashReply, a1, a2);
 	}
+
+	// friend functions
+	friend void AbandonRequests(void (*fn)(void*, CDataStream&), void* param1);
 
 
 

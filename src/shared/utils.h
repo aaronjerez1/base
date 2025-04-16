@@ -201,3 +201,7 @@ public:
          fcriticalblockonce && criticalblock.Entered() &&                      \
          (cs.sourceFile = __FILE__, cs.sourceLine = __LINE__, true);           \
          fcriticalblockonce = false, cs.sourceFile = "", cs.sourceLine = 0)
+
+
+// Simple string trim function
+std::string TrimString(const std::string& str);

@@ -123,3 +123,18 @@ uint64_t GetRand(uint64_t nMax)
     while (nRand >= nRange);
     return (nRand % nMax);
 }
+
+// Simple string trim function
+std::string TrimString(const std::string& str) {
+    // Find first non-whitespace
+    size_t start = str.find_first_not_of(" \t\n\r");
+    if (start == std::string::npos) {
+        return ""; // String is all whitespace
+    }
+
+    // Find last non-whitespace
+    size_t end = str.find_last_not_of(" \t\n\r");
+
+    // Return the trimmed substring
+    return str.substr(start, end - start + 1);
+}

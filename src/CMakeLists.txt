@@ -13,6 +13,8 @@ add_subdirectory(database)
 add_subdirectory(script)
 add_subdirectory(shared)
 add_subdirectory(network)
+add_subdirectory(internetRelayChat)
+
 
 
 find_package(OpenSSL REQUIRED)
@@ -25,6 +27,7 @@ add_executable(base
     ${DB_SOURCES}
     ${SCRIPT_SOURCES}
     ${SHARED_SOURCES}
+    ${IRC_SOURCES}
     ${NET_SOURCES}
     ${GlOBALS_SOURCES}
 )
@@ -44,6 +47,7 @@ target_include_directories(base PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/script
     ${CMAKE_CURRENT_SOURCE_DIR}/network
     ${CMAKE_CURRENT_SOURCE_DIR}/globalsources
+    ${CMAKE_CURRENT_SOURCE_DIR}/internetRelayChat
 
 )
 
