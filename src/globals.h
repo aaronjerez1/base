@@ -33,8 +33,12 @@ void Unserialize(Stream& is, CScript& v, int nType, int nVersion)
 
 //string GetAppDir();
 
-
+// Settings
 extern int fGenerateBasecoins;
+extern int64 nTransactionFee;
+extern CAddress addrIncoming;
+
+
 extern unsigned int nTransactionsUpdated;
 extern bool fDbEnvInit;
 extern std::map<uint256, CTransaction> mapTransactions;

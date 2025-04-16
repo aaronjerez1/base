@@ -3,8 +3,12 @@
 
 
 
-
+// Settings
 int fGenerateBasecoins = 1; // hehe
+int64 nTransactionFee = 0;
+CAddress addrIncoming;
+
+
 unsigned int nTransactionsUpdated = 0;
 bool fDbEnvInit = false;
 std::map<uint256, CTransaction> mapTransactions;

@@ -1,7 +1,8 @@
 #include "net.h"
 #include "../internetRelayChat/irc.h"
 //#include "../shared/utils.h"
-
+#include "../globals.h"
+//#include "../database/walletdb/walletdb.h"
 #include <netdb.h>
 //
 // Global state variables
@@ -164,8 +165,8 @@ bool GetMyExternalIP(unsigned int& ipRet)
 				}
 
 				pszGet = "GET / HTTP/1.1\r\n"
-					//"Host: checkip.dyndns.org\r\n"
-					//"User-Agent: Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)\r\n"
+					"Host: checkip.dyndns.org\r\n"
+					"User-Agent: Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)\r\n"
 					"Connection: close\r\n"
 					"\r\n";
 
@@ -179,6 +180,7 @@ bool GetMyExternalIP(unsigned int& ipRet)
 	return false;
 }
 #include "../database/addressdb/addressdb.h"
+#include <fcntl.h>
 bool AddAddress(CAddrDB& addrdb, const CAddress& addr)
 {
 	if (!addr.IsRoutable())
@@ -241,6 +243,103 @@ void AbandonRequests(void (*fn)(void*, CDataStream&), void* param1)
 	}
 }
 
-//
+// TODO: 
 // Subscription methods for the broadcast and subscription system.
 // channel numbers are message numbers, i.e. MSG_TABLE and MSG_PRODUC
+
+
+
+#include "../database/walletdb/walletdb.h"
+bool StartNode(string& strError)
+{
+	strError = "";
+
+	// Get local host ip
+	char pszHostName[255];
+	if (gethostname(pszHostName, 255) == -1)
+	{
+		strError = strprintf("Error: Unable to get IP address of this computer (gethostname returned error %d)", errno);
+		printf("%s\n", strError.c_str());
+		return false;
+	}
+
+	struct hostent* phostent = gethostbyname(pszHostName);
+	if (!phostent)
+	{
+		strError = strprintf("Error: Unable to get IP address of this computer (gethostbyname returned error %d)", errno);
+		printf("%s\n", strError.c_str());
+		return false;
+	}
+	
+	addrLocalHost = CAddress(*(long*)(phostent->h_addr_list[0]),
+		DEFAULT_PORT,
+		nLocalServices);
+	printf("addrLocalHost = %s\n", addrLocalHost.ToString().c_str());
+
+	int hListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (hListenSocket == -1)
+	{
+		strError = strprintf("Error: Couldn't open socket for incoming connections (socket returned error %d)", errno);
+		printf("%s\n", strError.c_str());
+		return false;
+	}
+
+	// Set to nonblocking, incoming connections will also inherit this
+	int flags = fcntl(hListenSocket, F_GETFL, 0);
+	if (flags == -1)
+	{
+		strError = strprintf("Error: Couldn't get socket flags (fcntl returned error %d)", errno);
+		printf("%s\n", strError.c_str());
+		return false;
+	}
+
+	if (fcntl(hListenSocket, F_SETFL, flags | O_NONBLOCK) == -1)
+	{
+		strError = strprintf("Error: Couldn't set socket to non-blocking mode (fcntl returned error %d)", errno);
+		printf("%s\n", strError.c_str());
+		return false;
+	}
+
+	// The sockaddr_in structure specifies the address family,
+	// IP address, and port for the socket that is being bound
+	int nRetryLimit = 15;
+	struct sockaddr_in sockaddr = addrLocalHost.GetSockAddr();
+	if (bind(hListenSocket, (struct sockaddr*)&sockaddr, sizeof(sockaddr)) == -1)
+	{
+		int nErr = errno;
+		if (nErr == EADDRINUSE)
+			strError = strprintf("Error: Unable to bind to port %s on this computer. The program is probably already running.", addrLocalHost.ToString().c_str());
+		else
+			strError = strprintf("Error: Unable to bind to port %s on this computer (bind returned error %d)", addrLocalHost.ToString().c_str(), nErr);
+		printf("%s\n", strError.c_str());
+		return false;
+	}
+	printf("bound to addrLocalHost = %s\n\n", addrLocalHost.ToString().c_str());
+
+
+	// Listen for incoming connections
+	if (listen(hListenSocket, SOMAXCONN) == -1)
+	{
+		strError = strprintf("Error: Listening for incoming connections failed (listen returned error %d)", errno);
+		printf("%s\n", strError.c_str());
+		return false;
+	}
+
+	// Get our external IP address for incoming connections
+	if (addrIncoming.ip)
+		addrLocalHost.ip = addrIncoming.ip;\
+
+	if (GetMyExternalIP(addrLocalHost.ip))
+	{
+		addrIncoming = addrLocalHost;
+		CWalletDB().WriteSetting("addrIncoming", addrIncoming);
+
+	}
+
+	// DONG IRC
+
+
+
+	return true;
+
+}
