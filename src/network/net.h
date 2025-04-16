@@ -7,12 +7,26 @@
 #include <algorithm>
 #include <openssl/rand.h>
 
+class CAddress;
 static const unsigned short DEFAULT_PORT = htons(8333);
 static const unsigned int PUBLISH_HOPS = 5;
 enum
 {
 	NODE_NETWORK = (1 << 0),
 };
+
+bool ConnectSocket(const CAddress& addrConnect, int hSocketRet);
+
+//bool GetMyExternalIP(unsigned int& ipRet);
+//bool AddAddress(CAddrDB& addrdb, const CAddress& addr);
+//CNode* FindNode(unsigned int ip);
+//CNode* ConnectNode(CAddress addrConnect, int64 nTimeout = 0);
+//void AbandonRequests(void (*fn)(void*, CDataStream&), void* param1);
+//bool AnySubscribed(unsigned int nChannel);
+//void ThreadBitcoinMiner(void* parg);
+//bool StartNode(string& strError = REF(string()));
+//bool StopNode();
+//void CheckForShutdown(int n);
 
 extern CCriticalSection cs_mapAddresses;
 
@@ -385,7 +399,8 @@ extern std::map<CInv, CDataStream> mapRelay;
 extern std::deque<std::pair<int64, CInv> > vRelayExpiration;
 extern CCriticalSection cs_mapRelay;
 
-
+extern bool fShutdown;
+extern CAddress addrProxy;
 
 
 /////////////////

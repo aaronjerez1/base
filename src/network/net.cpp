@@ -14,6 +14,9 @@ CAddress addrLocalHost(0, DEFAULT_PORT, nLocalServices);
 //CNode nodeLocalHost(-1, CAddress("127.0.0.1", nLocalServices));
 //CNode* pnodeLocalHost = &nodeLocalHost;
 bool fShutdown = false;
+CAddress addrProxy;
+
+
 std::array<bool, 10> vfThreadRunning;
 std::vector<CNode*> vNodes;
 CCriticalSection cs_vNodes;
@@ -25,7 +28,7 @@ CCriticalSection cs_mapRelay;
 std::map<CInv, int64> mapAlreadyAskedFor;
 
 
-CAddress addrProxy;
+
 
 bool ConnectSocket(const CAddress& addrConnect, int hSocketRet)
 {
