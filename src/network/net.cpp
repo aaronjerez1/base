@@ -4,6 +4,7 @@
 #include "../globals.h"
 //#include "../database/walletdb/walletdb.h"
 #include <netdb.h>
+#include "../database/addressdb/addressdb.h"
 //
 // Global state variables
 //
@@ -20,8 +21,8 @@ CAddress addrProxy;
 std::array<bool, 10> vfThreadRunning;
 std::vector<CNode*> vNodes;
 CCriticalSection cs_vNodes;
-std::map<std::vector<unsigned char>, CAddress> mapAddresses;
 CCriticalSection cs_mapAddresses;
+std::map<std::vector<unsigned char>, CAddress> mapAddresses;
 //std::map<CInv, CDataStream> mapRelay;
 std::deque<std::pair<int64, CInv> > vRelayExpiration;
 CCriticalSection cs_mapRelay;
@@ -82,6 +83,11 @@ bool ConnectSocket(const CAddress& addrConnect, int hSocketRet)
 	hSocketRet = hSocket;
 	return true;
 }
+
+
+
+
+
 
 bool GetMyExternalIP2(const CAddress& addrConnect, const char* pszGet, const char* pszKeyword, unsigned int& ipRet)
 {

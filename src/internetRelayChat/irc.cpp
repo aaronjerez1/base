@@ -1,61 +1,22 @@
 #include "irc.h"
-#include "../globals.h"
+//#include "../globals.h"
 #include "../network/net.h"
 #include <netdb.h>
+#include "../shared/base58.h" // globals.h come from here
+#include "../database/addressdb/addressdb.h"
+
+std::map<std::vector<unsigned char>, CAddress> mapIRCAddresses;
+CCriticalSection cs_mapIRCAddresses;
+
+#pragma pack(push, 1)  // Save current packing and set to 1-byte alignment
+struct ircaddr
+{
+    int ip;     // 4 bytes
+    short port; // 2 bytes
+};
+#pragma pack(pop)  // Restore previous packing setting
 
 
-/// CONNECTSOCKET
-//bool ConnectSocket(const CAddress& addrConnect, int hSocketRet)
-//{
-//    hSocketRet = -1;
-//    int hSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-//    if (hSocket == -1)
-//    {
-//        return false;
-//    }
-//
-//    bool fRoutable = !(addrConnect.GetByte(3) == 10 || (addrConnect.GetByte(3) == 192 && addrConnect.GetByte(2) == 168));
-//    bool fProxy = (addrProxy.ip && fRoutable);
-//    struct sockaddr_in sockaddr = (fProxy ? addrProxy.GetSockAddr() : addrConnect.GetSockAddr());
-//
-//    if (connect(hSocket, (struct sockaddr*)&sockaddr, sizeof(sockaddr)) == -1)
-//    {
-//        close(hSocket);
-//        return false;
-//    }
-//
-//    if (fProxy)
-//    {
-//        printf("Proxy connecting to %s\n", addrConnect.ToString().c_str());
-//        char pszSocks4IP[] = "\4\1\0\0\0\0\0\0user";
-//        memcpy(pszSocks4IP + 2, &addrConnect.port, 2);
-//        memcpy(pszSocks4IP + 4, &addrConnect.ip, 4);
-//        char* pszSocks4 = pszSocks4IP;
-//        int nSize = sizeof(pszSocks4IP);
-//
-//        int ret = send(hSocket, pszSocks4, nSize, 0);
-//        if (ret != nSize)
-//        {
-//            close(hSocket);
-//            return error("Error sending to proxy\n");
-//        }
-//        char pchRet[8];
-//        if (recv(hSocket, pchRet, 8, 0) != 8)
-//        {
-//            close(hSocket);
-//            return error("Error reading proxy response\n");
-//        }
-//        if (pchRet[1] != 0x5a)
-//        {
-//            close(hSocket);
-//            return error("Proxy returned error %d\n", pchRet[1]);
-//        }
-//        printf("Proxy connection established %s\n", addrConnect.ToString().c_str());
-//    }
-//
-//    hSocketRet = hSocket;
-//    return true;
-//}
 bool Wait(int nSeconds)
 {
     if (fShutdown)
@@ -70,6 +31,40 @@ bool Wait(int nSeconds)
     return true;
 }
 
+bool DecodeAddress(string str, CAddress& addr)
+{
+    vector<unsigned char> vch;
+    //if (!DecodeBase58Check(str.substr(1), vch))
+    //    return false;
+
+    struct ircaddr tmp;
+    if (vch.size() != sizeof(tmp))
+        return false;
+    memcpy(&tmp, &vch[0], sizeof(tmp));
+
+    addr = CAddress(tmp.ip, tmp.port);
+    return true;
+}
+
+
+static bool Send(int hSocket, const char* pszSend)
+{
+    if (strstr(pszSend, "PONG") != pszSend)
+        printf("SENDING: %s\n", pszSend);
+    const char* psz = pszSend;
+    const char* pszEnd = psz + strlen(psz);
+    while (psz < pszEnd)
+    {
+        int ret = send(hSocket, psz, pszEnd - psz, 0);
+        if (ret < 0)
+        {
+            printf("send error: %s\n", strerror(errno));
+            return false;
+        }
+        psz += ret;
+    }
+    return true;
+}
 
 /// <summary>
 ///
@@ -114,6 +109,46 @@ bool RecvLine(int hSocket, string& strLine)
     }
 }
 
+bool RecvLineIRC(int hSocket, string& strLine)
+{
+    loop
+    {
+        bool fRet = RecvLine(hSocket, strLine);
+        if (fRet)
+        {
+            if (fShutdown)
+                return false;
+            vector<string> vWords;
+            ParseString(strLine, ' ', vWords);
+            if (vWords[0] == "PING")
+            {
+                strLine[1] = 'O';
+                strLine += '\r';
+                Send(hSocket, strLine.c_str());
+                continue;
+            }
+        }
+        return fRet;
+    }
+}
+
+bool RecvUntil(int hSocket, const char* psz1, const char* psz2 = NULL, const char* psz3 = NULL)
+{
+    loop
+    {
+        string strLine;
+        if (!RecvLineIRC(hSocket, strLine))
+            return false;
+        printf("IRC %s\n", strLine.c_str());
+        if (psz1 && strLine.find(psz1) != -1)
+            return true;
+        if (psz2 && strLine.find(psz2) != -1)
+            return true;
+        if (psz3 && strLine.find(psz3) != -1)
+            return true;
+    }
+}
+
 void ThreadIRCSeed(void* parg)
 {
     pthread_t current_thread = pthread_self();
@@ -148,7 +183,93 @@ void ThreadIRCSeed(void* parg)
             else
                 return;
         }
-        //
-        /// pointer
+
+        if (!RecvUntil(hSocket, "Found your hostname", "using your IP address instead", "Couldn't look up your hostname"))
+        {
+            close(hSocket);
+            nErrorWait = nErrorWait * 11 / 10;
+            if (Wait(nErrorWait += 60))
+                continue;
+            else
+                return;
+        }
+        
+        sleep(500);
+
+        Send(hSocket, "JOIN #bitcoin\r");
+        Send(hSocket, "WHO #bitcoin\r");
+
+        int64 nStart = GetTime();
+        string strLine;
+
+        while (!fShutdown && RecvLineIRC(hSocket, strLine))
+        {
+            if (strLine.empty() || strLine.size() > 900 || strLine[0] != ':')
+                continue;
+            printf("IRC %s\n", strLine.c_str());
+
+            std::vector<std::string> vWords;
+            ParseString(strLine, ' ', vWords);
+            if (vWords.size() < 2)
+                continue;
+
+            char pszName[10000];
+            pszName[0] = '\0';
+
+            if (vWords[1] == "352" && vWords.size() >= 8)
+            {
+                // index 7 is limited to 16 characters
+                // could get full length name at index 10, but would be different from join messages
+                strcpy(pszName, vWords[7].c_str());
+                printf("GOT WHO: [%s]  ", pszName);
+            }
+
+            if (vWords[1] == "JOIN" && vWords[0].size() > 1)
+            {
+                // :username!username@50000007.F000000B.90000002.IP JOIN :#channelname
+                strcpy(pszName, vWords[0].c_str() + 1);
+                if (strchr(pszName, '!'))
+                    *strchr(pszName, '!') = '\0';
+                printf("GOT JOIN: [%s]  ", pszName);
+            }
+
+            if (pszName[0] == 'u')
+            {
+                CAddress addr;
+                if (DecodeAddress(pszName, addr))
+                {
+                    CAddrDB addrdb;
+                    if (AddAddress(addrdb, addr))
+                        printf("new  ");
+                    else
+                    {
+                        // make it try connecting again
+                        CRITICAL_BLOCK(cs_mapAddresses)
+                            if (mapAddresses.count(addr.GetKey()))
+                                mapAddresses[addr.GetKey()].nLastFailed = 0;
+                    }
+                    addr.print();
+
+                    CRITICAL_BLOCK(cs_mapIRCAddresses)
+                        mapIRCAddresses.insert(std::make_pair(addr.GetKey(), addr));
+                }
+                else
+                {
+                    printf("decode failed\n");
+                }
+            }
+        }
+
+        close(hSocket);
+
+        if (GetTime() - nStart > 20 * 60)
+        {
+            nErrorWait /= 3;
+            nRetryWait /= 3;
+        }
+
+        nRetryWait = nRetryWait * 11 / 10;
+        if (!Wait(nRetryWait += 60))
+            return;
     }
 }

@@ -8,6 +8,8 @@
 #include <openssl/rand.h>
 
 class CAddress;
+class CAddrDB;
+
 static const unsigned short DEFAULT_PORT = htons(8333);
 static const unsigned int PUBLISH_HOPS = 5;
 enum
@@ -16,6 +18,7 @@ enum
 };
 
 bool ConnectSocket(const CAddress& addrConnect, int hSocketRet);
+bool AddAddress(CAddrDB& addrdb, const CAddress& addr);
 
 //bool GetMyExternalIP(unsigned int& ipRet);
 //bool AddAddress(CAddrDB& addrdb, const CAddress& addr);
@@ -29,6 +32,7 @@ bool ConnectSocket(const CAddress& addrConnect, int hSocketRet);
 //void CheckForShutdown(int n);
 
 extern CCriticalSection cs_mapAddresses;
+extern std::map<std::vector<unsigned char>, CAddress> mapAddresses;
 
 
 //

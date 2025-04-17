@@ -138,3 +138,15 @@ std::string TrimString(const std::string& str) {
     // Return the trimmed substring
     return str.substr(start, end - start + 1);
 }
+
+void ParseString(const std::string& str, char c, std::vector<std::string>& v)
+{
+    unsigned int i1 = 0;
+    unsigned int i2;
+    do
+    {
+        i2 = str.find(c, i1);
+        v.push_back(str.substr(i1, i2 - i1));
+        i1 = i2 + 1;
+    } while (i2 != str.npos);
+}

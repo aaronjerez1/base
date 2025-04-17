@@ -1,7 +1,7 @@
 #include "addressdb.h"
 #include "../globals.h"
 
-CCriticalSection cs_mapIRCAddresses; // this is very convoluted thing. this was in irc
+//CCriticalSection cs_mapIRCAddresses; // this is very convoluted thing. this was in irc
 //CCriticalSection cs_mapAddresses; // and this in net
 //
 // took a two day break.

@@ -16,6 +16,7 @@ bool error(const char* format, ...);
 int64 GetTime();
 int64 GetAdjustedTime();
 uint64_t GetRand(uint64_t nMax);
+void ParseString(const std::string & str, char c, std::vector<std::string>&v);
 
 template<typename T>
 std::string HexStr(const T itbegin, const T itend, bool fSpaces = true)
