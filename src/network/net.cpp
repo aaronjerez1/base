@@ -256,7 +256,70 @@ void AbandonRequests(void (*fn)(void*, CDataStream&), void* param1)
 // Subscription methods for the broadcast and subscription system.
 // channel numbers are message numbers, i.e. MSG_TABLE and MSG_PRODUC
 
+/// <summary>
+/// Thread handler
+/// </summary>
+struct ThreadArgs {
+	void (*func)(void*);
+	void* arg;
+	int index;
+};
 
+//bool vfThreadRunning[4] = { false, false, false, false };
+
+// Simple thread wrapper that sets/clears the running flag
+void* ThreadWrapperFunction(void* args)
+{
+	// Unpack the arguments
+	ThreadArgs* threadArgs = (ThreadArgs*)args;
+
+	int index = threadArgs->index;
+	void (*func)(void*) = threadArgs->func;
+	void* arg = threadArgs->arg;
+
+	// Free the arguments structure
+	free(threadArgs);
+
+	// Set the thread running flag
+	vfThreadRunning[index] = true;
+
+	// Call the actual thread function
+	func(arg);
+
+	// Clear the thread running flag
+	vfThreadRunning[index] = false;
+
+	return NULL;
+}
+
+// Modified thread creation function for void return type
+bool StartThread(void (*func)(void*), void* arg, int index, string& strError)
+{
+	// Allocate and prepare arguments
+	ThreadArgs* threadArgs = (ThreadArgs*)malloc(sizeof(ThreadArgs));
+	if (!threadArgs) {
+		strError = "Error: malloc failed";
+		return false;
+	}
+
+	threadArgs->func = func;
+	threadArgs->arg = arg;
+	threadArgs->index = index;
+
+	// Create the thread
+	pthread_t thread;
+	int result = pthread_create(&thread, NULL, ThreadWrapperFunction, threadArgs);
+
+	if (result != 0) {
+		free(threadArgs);
+		strError = strerror(result);
+		return false;
+	}
+
+	// Detach thread so it cleans up automatically
+	pthread_detach(thread);
+	return true;
+}
 
 #include "../database/walletdb/walletdb.h"
 bool StartNode(string& strError)
@@ -345,8 +408,21 @@ bool StartNode(string& strError)
 
 	}
 
-	// DONG IRC
+	std::string threadError;
+	// Get addresses from IRC and advertise ours
+	if (!StartThread(ThreadIRCSeed, NULL, 1, threadError))
+	{
+		printf("Error: StartThread(ThreadIRCSeed) failed: %s\n", threadError.c_str());
+		return false;
+	}
 
+	// Start Threads
+
+	//if (!StartThread(ThreadSocketHandler, new int(hListenSocket), 0, threadError)) {
+	//	strError = "Error: StartThread(ThreadSocketHandler) failed: " + threadError;
+	//	printf("%s\n", strError.c_str());
+	//	return false;
+	//}
 
 
 	return true;
