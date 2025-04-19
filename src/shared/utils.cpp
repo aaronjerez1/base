@@ -150,3 +150,79 @@ void ParseString(const std::string& str, char c, std::vector<std::string>& v)
         i1 = i2 + 1;
     } while (i2 != str.npos);
 }
+
+
+#include <sys/resource.h> // For getrusage
+#include <sys/sysinfo.h>  // For sysinfo
+
+void RandAddSeed(bool fPerfmon)
+{
+    // Seed with high-resolution clock
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    RAND_add(&ts, sizeof(ts), 1.5);
+    memset(&ts, 0, sizeof(ts));
+
+    static int64 nLastPerfmon;
+    if (fPerfmon || GetTime() > nLastPerfmon + 5 * 60)
+    {
+        nLastPerfmon = GetTime();
+
+        // Prepare buffer
+        unsigned char pdata[250000];
+        memset(pdata, 0, sizeof(pdata));
+        unsigned long nSize = 0;
+
+        // Add WSL-specific information
+
+        // Get entropy from process information
+        pid_t pid = getpid();
+        RAND_add(&pid, sizeof(pid), 0.1);
+
+        // Get current resource usage
+        struct rusage usage;
+        if (getrusage(RUSAGE_SELF, &usage) == 0) {
+            nSize += sizeof(usage);
+            memcpy(pdata + nSize - sizeof(usage), &usage, sizeof(usage));
+        }
+
+        // Add memory information
+        FILE* f = fopen("/proc/meminfo", "rb");
+        if (f) {
+            nSize += fread(pdata + nSize, 1, 4096, f);
+            fclose(f);
+        }
+
+        // Get system uptime if available
+        struct sysinfo s_info;
+        if (sysinfo(&s_info) == 0) {
+            nSize += sizeof(s_info);
+            memcpy(pdata + nSize - sizeof(s_info), &s_info, sizeof(s_info));
+        }
+
+        // Get random data from /dev/urandom (should be available in WSL)
+        f = fopen("/dev/urandom", "rb");
+        if (f) {
+            unsigned char random_buf[1024];
+            size_t random_read = fread(random_buf, 1, sizeof(random_buf), f);
+            RAND_add(random_buf, random_read, random_read);
+            fclose(f);
+            memset(random_buf, 0, sizeof(random_buf));
+        }
+
+        if (nSize > 0) {
+            uint256 hash;
+            SHA256(pdata, nSize, (unsigned char*)&hash);
+            RAND_add(&hash, sizeof(hash), std::min(nSize / 500.0, (double)sizeof(hash)));
+            hash = 0;
+            memset(pdata, 0, nSize);
+
+            time_t nTime;
+            time(&nTime);
+            struct tm* ptmTime = gmtime(&nTime);
+            char pszTime[200];
+            strftime(pszTime, sizeof(pszTime), "%x %H:%M:%S", ptmTime);
+            printf("%s  RandAddSeed() got %d bytes of system data\n", pszTime, nSize);
+        }
+    }
+}

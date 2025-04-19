@@ -14,6 +14,7 @@ class CWalletTx;
 class CTxDB;
 class CTxIndex;
 class CDiskTxPos;
+class CKey;
 
 inline unsigned int GetSerializeSize(const CScript& v, int nType, int nVersion)
 {
@@ -65,6 +66,7 @@ extern CCriticalSection cs_main;
 extern CCriticalSection cs_mapTransactions;
 extern CCriticalSection cs_db;
 
+extern CKey keyUser;
 extern std::map<std::vector<unsigned char>, CPrivKey> mapKeys;
 extern std::map<uint160, std::vector<unsigned char> > mapPubKeys;
 extern CCriticalSection cs_mapKeys;

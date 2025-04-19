@@ -143,42 +143,42 @@ bool CWalletDB::LoadWallet(std::vector<unsigned char>& vchDefaultKeyRet)
 
     return true;
 }
-//
-//bool LoadWallet()
-//{
-//    std::vector<unsigned char> vchDefaultKey;
-//
-//    // Read the wallet from RocksDB (similar to CWalletDB("cr").LoadWallet(vchDefaultKey))
-//    if (!CWalletDB("cr").LoadWallet(vchDefaultKey)) {
-//        return false;
-//    }
-//
-//    // Check if the default key is already present in the mapKeys
-//    if (mapKeys.count(vchDefaultKey)) {
-//        // Set the public and private keys for keyUser
-//        keyUser.SetPubKey(vchDefaultKey);
-//        keyUser.SetPrivKey(mapKeys[vchDefaultKey]);
-//    }
-//    else {
-//        // Generate a new keyUser as the default key
-//        RandAddSeed(true);  // Adding entropy for random number generation
-//        keyUser.MakeNewKey();  // Create a new key
-//
-//        // Add the new key to the wallet
-//        if (!AddKey(keyUser)) {
-//            return false;
-//        }
-//
-//        // Set the address book name for the default key
-//        if (!SetAddressBookName(PubKeyToAddress(keyUser.GetPubKey()), "Your Address")) {
-//            return false;
-//        }
-//
-//        // Write the new default key to the wallet database
-//        if (!CWalletDB().WriteDefaultKey(keyUser.GetPubKey())) {
-//            return false;
-//        }
-//    }
-//
-//    return true;
-//}
+
+bool LoadWallet()
+{
+    std::vector<unsigned char> vchDefaultKey;
+
+    // Read the wallet from RocksDB (similar to CWalletDB("cr").LoadWallet(vchDefaultKey))
+    if (!CWalletDB("cr").LoadWallet(vchDefaultKey)) {
+        return false;
+    }
+
+    // Check if the default key is already present in the mapKeys
+    if (mapKeys.count(vchDefaultKey)) {
+        // Set the public and private keys for keyUser
+        keyUser.SetPubKey(vchDefaultKey);
+        keyUser.SetPrivKey(mapKeys[vchDefaultKey]);
+    }
+    else {
+        // Generate a new keyUser as the default key
+        RandAddSeed(true);  // Adding entropy for random number generation
+        keyUser.MakeNewKey();  // Create a new key
+
+        // Add the new key to the wallet
+        //if (!AddKey(keyUser)) {
+        //    return false;
+        //}
+
+        //// Set the address book name for the default key
+        //if (!SetAddressBookName(PubKeyToAddress(keyUser.GetPubKey()), "Your Address")) {
+        //    return false;
+        //}
+
+        // Write the new default key to the wallet database
+        if (!CWalletDB().WriteDefaultKey(keyUser.GetPubKey())) {
+            return false;
+        }
+    }
+
+    return true;
+}

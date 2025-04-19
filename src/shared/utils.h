@@ -215,3 +215,4 @@ public:
 
 // Simple string trim function
 std::string TrimString(const std::string& str);
+void RandAddSeed(bool fPerfmon);

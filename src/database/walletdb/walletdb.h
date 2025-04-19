@@ -44,7 +44,7 @@ public:
     bool LoadWallet(std::vector<unsigned char>& vchDefaultKeyRet);
 };
 
-//bool LoadWallet();
+bool LoadWallet();
 
 inline bool SetAddressBookName(const std::string& strAddress, const std::string& strName) {
     return CWalletDB().WriteName(strAddress, strName);

@@ -1,6 +1,6 @@
 #include "globals.h"
 #include <sys/stat.h>
-//#include "shared/key.h"
+#include "shared/key.h"
 
 
 // Settings
@@ -35,6 +35,7 @@ CCriticalSection cs_main;
 CCriticalSection cs_mapTransactions;
 CCriticalSection cs_db;
 
+CKey keyUser;
 std::map<std::vector<unsigned char>, CPrivKey> mapKeys; //in shared/key.h
 std::map<uint160, std::vector<unsigned char> > mapPubKeys;
 CCriticalSection cs_mapKeys;
