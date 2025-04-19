@@ -6,13 +6,14 @@
 #include "network/net.h"
 #include "database/db.h"
 #include <algorithm>
+#include "shared/types.h"
 
 class CBlockIndex;
 class CTransaction;
+class CWalletTx;
 class CTxDB;
 class CTxIndex;
 class CDiskTxPos;
-
 
 inline unsigned int GetSerializeSize(const CScript& v, int nType, int nVersion)
 {
@@ -63,6 +64,17 @@ extern CBlockIndex* pindexGenesisBlock;
 extern CCriticalSection cs_main;
 extern CCriticalSection cs_mapTransactions;
 extern CCriticalSection cs_db;
+
+extern std::map<std::vector<unsigned char>, CPrivKey> mapKeys;
+extern std::map<uint160, std::vector<unsigned char> > mapPubKeys;
+extern CCriticalSection cs_mapKeys;
+
+
+extern std::map<uint256, CWalletTx> mapWallet;
+extern std::vector<std::pair<uint256, bool> > vWalletUpdated;
+extern CCriticalSection cs_mapWallet;
+
+
 
 extern std::map<std::string, int> mapFileUseCount;
 extern std::map<string, string> mapAddressBook;
@@ -1038,7 +1050,7 @@ public:
 	//bool DisconnectBlock(CTxDB& txdb, CBlockIndex* pindex);
 	//bool ConnectBlock(CTxDB& txdb, CBlockIndex* pindex);
 	//bool ReadFromDisk(const CBlockIndex* blockindex, bool fReadTransactions);
-	//bool AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos);
+	bool AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos);
 	//bool CheckBlock() const;
 	//bool AcceptBlock();
 };

@@ -8,7 +8,7 @@ public:
     CAddrDB(const char* pszMode = "r+", bool fTxn = false) : CDB("addr.base", fTxn) {}
 
     bool WriteAddress(const CAddress& addr);
-    //bool LoadAddresses();
+    bool LoadAddresses();
 };
 
-//bool LoadAddresses();
+bool LoadAddresses();

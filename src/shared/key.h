@@ -5,10 +5,8 @@
 #include <serialize.h>
 #include <vector>
 #include "uint256.h"
-
+#include "types.h"
 // todo: secure_allocator here and in serialize.h
-typedef std::vector<unsigned char, secure_allocator<unsigned char>> CPrivKey;
-
 
 class CKey
 {

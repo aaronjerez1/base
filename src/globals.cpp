@@ -1,6 +1,6 @@
 #include "globals.h"
 #include <sys/stat.h>
-
+//#include "shared/key.h"
 
 
 // Settings
@@ -31,17 +31,28 @@ int nBestHeight = -1;
 std::map<uint256, CBlockIndex*> mapBlockIndex; // organize these guys
 
 
-
 CCriticalSection cs_main;
 CCriticalSection cs_mapTransactions;
 CCriticalSection cs_db;
 
+std::map<std::vector<unsigned char>, CPrivKey> mapKeys; //in shared/key.h
+std::map<uint160, std::vector<unsigned char> > mapPubKeys;
+CCriticalSection cs_mapKeys;
+
+std::map<uint256, CWalletTx> mapWallet;
+std::vector<std::pair<uint256, bool> > vWalletUpdated;
+CCriticalSection cs_mapWallet;
+
 std::string strSetDataDir;
-
-
 
 std::map<std::string, int> mapFileUseCount;
 std::map<string, string> mapAddressBook;
+
+
+bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos)
+{
+    return true;
+}
 
 
 std::string GetAppDir()

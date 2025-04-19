@@ -41,7 +41,7 @@ public:
         return Write(std::make_pair(std::string("setting"), strKey), value);
     }
 
-    //bool LoadWallet(std::vector<unsigned char>& vchDefaultKeyRet);
+    bool LoadWallet(std::vector<unsigned char>& vchDefaultKeyRet);
 };
 
 //bool LoadWallet();
