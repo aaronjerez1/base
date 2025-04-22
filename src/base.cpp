@@ -5,6 +5,8 @@
 #include "base.h"
 #include "miner/miner.h"
 #include "database/addressdb/addressdb.h"
+#include "database/walletdb/walletdb.h"
+
 #include "globals.h"
 
 using namespace std;
@@ -31,11 +33,14 @@ bool LoadBlockIndex(bool fAllowNew = true)
 		CTransaction txNew;
 		txNew.vin.resize(1);
 		txNew.vout.resize(1);
-		txNew.vin[0].scriptSig = CScript() << 486604799 << CBigNum(4) << vector<unsigned char>((unsigned char*)pszTimestamp, (unsigned char*)pszTimestamp + strlen(pszTimestamp));
+		txNew.vin[0].scriptSig = CScript() << 486604799 << CBigNum(4) << std::vector<unsigned char>((unsigned char*)pszTimestamp, (unsigned char*)pszTimestamp + strlen(pszTimestamp));
 		txNew.vout[0].nValue = 50 * COIN;
 		txNew.vout[0].scriptPubKey = CScript() << CBigNum("0x5F1DF16B2B704C8A578D0BBAF74D385CDE12C11EE50455F3C438EF4C3FBCF649B6DE611FEAE06279A60939E028A8D65C10B73071A6F16719274855FEB0FD8A6704") << OP_CHECKSIG;
+		
 		CBlock block;
+		
 		block.vtx.push_back(txNew);
+
 		block.hashPrevBlock = 0;
 		block.hashMerkleRoot = block.BuildMerkleTree();
 		block.nVersion = 1;
@@ -99,12 +104,21 @@ int main()
 	// Load wallet
 	printf("Loading wallet...\n");
 	clock_gettime(CLOCK_MONOTONIC, &tStart);
-	if (!LoadBlockIndex())
+	if (!LoadWallet())
 		strErrors += "Error loading wallet.base      \n";
 	clock_gettime(CLOCK_MONOTONIC, &tEnd);
 	elapsed = (tEnd.tv_sec - tStart.tv_sec) * 1e9 + (tEnd.tv_nsec - tStart.tv_nsec);
 	printf(" wallet   %20.0f\n", elapsed);
 
+
+	printf("Done loading\n");
+	//// debug print
+		printf("mapBlockIndex.size() = %d\n", mapBlockIndex.size());
+		printf("nBestHeight = %d\n", nBestHeight);
+		printf("mapKeys.size() = %d\n", mapKeys.size());
+		printf("mapPubKeys.size() = %d\n", mapPubKeys.size());
+		printf("mapWallet.size() = %d\n", mapWallet.size());
+		printf("mapAddressBook.size() = %d\n", mapAddressBook.size());
 
 
 	CoinMiner();

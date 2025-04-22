@@ -46,6 +46,6 @@ public:
 
 bool LoadWallet();
 
-inline bool SetAddressBookName(const std::string& strAddress, const std::string& strName) {
+inline bool SetAddressBookName(const std::string& strAddress, const std::string& strName) { ///// TODO: debug this
     return CWalletDB().WriteName(strAddress, strName);
 }

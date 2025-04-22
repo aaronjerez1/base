@@ -1,7 +1,7 @@
 #include "globals.h"
 #include <sys/stat.h>
 #include "shared/key.h"
-
+#include "database/walletdb/walletdb.h"
 
 // Settings
 int fGenerateBasecoins = 1; // hehe
@@ -39,6 +39,31 @@ CKey keyUser;
 std::map<std::vector<unsigned char>, CPrivKey> mapKeys; //in shared/key.h
 std::map<uint160, std::vector<unsigned char> > mapPubKeys;
 CCriticalSection cs_mapKeys;
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// mapKeys
+//
+
+bool AddKey(const CKey& key)
+{
+    CRITICAL_BLOCK(cs_mapKeys)
+    {
+        mapKeys[key.GetPubKey()] = key.GetPrivKey();
+        mapPubKeys[Hash160(key.GetPubKey())] = key.GetPubKey();
+    }
+    return CWalletDB().WriteKey(key.GetPubKey(), key.GetPrivKey());
+}
+
+vector<unsigned char> GenerateNewKey()
+{
+    CKey key;
+    key.MakeNewKey();
+    if (!AddKey(key))
+        throw std::runtime_error("GenerateNewKey() : AddKey failed\n");
+    return key.GetPubKey();
+}
+
 
 std::map<uint256, CWalletTx> mapWallet;
 std::vector<std::pair<uint256, bool> > vWalletUpdated;

@@ -1,6 +1,8 @@
 #include "walletdb.h"
 
 #include "../globals.h"
+#include "../../shared/base58.h"
+
 
 bool CWalletDB::ReadName(const std::string& strAddress, std::string& strName) {
     strName = "";
@@ -165,14 +167,14 @@ bool LoadWallet()
         keyUser.MakeNewKey();  // Create a new key
 
         // Add the new key to the wallet
-        //if (!AddKey(keyUser)) {
-        //    return false;
-        //}
+        if (!AddKey(keyUser)) {
+            return false;
+        }
 
-        //// Set the address book name for the default key
-        //if (!SetAddressBookName(PubKeyToAddress(keyUser.GetPubKey()), "Your Address")) {
-        //    return false;
-        //}
+        // Set the address book name for the default key
+        if (!SetAddressBookName(PubKeyToAddress(keyUser.GetPubKey()), "Your Address")) {
+            return false;
+        }
 
         // Write the new default key to the wallet database
         if (!CWalletDB().WriteDefaultKey(keyUser.GetPubKey())) {

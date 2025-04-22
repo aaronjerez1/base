@@ -73,9 +73,6 @@ inline uint256 Hash(const T1 p1begin, const T1 p1end,
     return hash2;
 }
 
-
-
-
 template<typename T>
 uint256 SerializeHash(const T& obj, int nType = SER_GETHASH, int nVersion = VERSION)
 {

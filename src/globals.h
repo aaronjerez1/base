@@ -71,6 +71,10 @@ extern std::map<std::vector<unsigned char>, CPrivKey> mapKeys;
 extern std::map<uint160, std::vector<unsigned char> > mapPubKeys;
 extern CCriticalSection cs_mapKeys;
 
+bool AddKey(const CKey& key);
+std::vector<unsigned char> GenerateNewKey();
+
+
 
 extern std::map<uint256, CWalletTx> mapWallet;
 extern std::vector<std::pair<uint256, bool> > vWalletUpdated;
@@ -140,7 +144,7 @@ public:
 };
 
 /// <summary>
-///   TODO: start form here again after the IMPLEMENT_SERIALIZE is done!
+///   
 /// </summary>
 class COutPoint
 {
@@ -359,8 +363,18 @@ class CTransaction
 {
 public:
 	int nVersion;
-	std::vector<CTxIn> vin;
+	std::vector<CTxIn> vin; // here you should do a CToken Transaction and serializehash it, then debug debug and debug.
 	std::vector<CTxOut> vout;
+// Define Tasks
+	// get a grokable data set of the trasactions
+	//  a token setence
+	// seems to not need mathematical signs
+	// 
+// Define the operation in this transaction
+
+
+
+	string what = "vin";
 	int nLockTime;
 
 	IMPLEMENT_SERIALIZE
