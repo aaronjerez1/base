@@ -366,16 +366,8 @@ public:
 	int nVersion;
 	std::vector<CTxIn> vin; // here you should do a CToken Transaction and serializehash it, then debug debug and debug.
 	std::vector<CTxOut> vout;
-// Define Tasks
-	// get a grokable data set of the trasactions
-	//  a token setence
-	// seems to not need mathematical signs
-	// 
-// Define the operation in this transaction
 
 
-
-	string what = "vin";
 	int nLockTime;
 
 	IMPLEMENT_SERIALIZE
@@ -387,6 +379,13 @@ public:
 		READWRITE(nLockTime);
 	)
 
+// Define Tasks
+	// get a grokable data set of the trasactions
+	//  a token setence
+	// seems to not need mathematical signs
+	// ab=(a+b), 11=2, 22=4
+// Define the operation in this transaction
+	std::string what = GetSequence(*this);
 
 	CTransaction()
 	{
@@ -409,6 +408,30 @@ public:
 	uint256 GetHash() const
 	{
 		return SerializeHash(*this);
+	}
+
+	std::string GetSequence(const CTransaction& tx) {
+		std::string sequence = "TX:" + tx.GetHash().ToString() + "|";
+
+		// Add inputs
+		sequence += "INPUTS[";
+		for (int i = 0; i < tx.vin.size(); i++) {
+			if (i > 0) sequence += ";";
+			sequence += tx.vin[i].prevout.hash.ToString() + ":" +
+				std::to_string(tx.vin[i].prevout.n);
+		}
+		sequence += "]|";
+
+		// Add outputs
+		sequence += "OUTPUTS[";
+		for (int i = 0; i < tx.vout.size(); i++) {
+			if (i > 0) sequence += ";";
+			sequence += std::to_string(tx.vout[i].nValue) + ":" +
+				tx.vout[i].scriptPubKey.ToString();
+		}
+		sequence += "]";
+
+		return sequence;
 	}
 
 	bool IsFinal() const
