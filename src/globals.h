@@ -192,6 +192,7 @@ public:
 class CTxIn
 {
 public:
+
 	COutPoint prevout;
 	CScript scriptSig;
 	unsigned int nSequence;
