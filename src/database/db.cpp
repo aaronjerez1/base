@@ -15,7 +15,7 @@ CDB::CDB(const char* pszFile, bool fTxn) : pdb(nullptr) {
 
     CRITICAL_BLOCK(cs_db) {
         if (!fDbEnvInit) {
-            std::string strAppDir = "database";
+            std::string strAppDir = "databasedata";
             if (!fs::exists(strAppDir)) {
                 fs::create_directory(strAppDir);
             }

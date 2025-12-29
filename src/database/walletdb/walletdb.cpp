@@ -51,15 +51,6 @@ bool CWalletDB::WriteDefaultKey(const std::vector<unsigned char>& vchPubKey) {
 
 
 
-
-
-
-
-
-
-
-
-
 bool CWalletDB::LoadWallet(std::vector<unsigned char>& vchDefaultKeyRet)
 {
     vchDefaultKeyRet.clear();

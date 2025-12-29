@@ -88,11 +88,18 @@ extern std::map<string, string> mapAddressBook;
 
 
 
-
+//////////////
+///// METHODS
+//////////////
 
 FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode = "rb");
 FILE* AppendBlockFile(unsigned int& nFileRet);
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast);
+void ReacceptWalletTransactions();
+bool CheckDiskSpace(int64 nAdditionalBytes = 0);
+
+bool ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv);
+
 	
 class CDiskTxPos
 {
@@ -142,6 +149,20 @@ public:
 	}
 
 };
+
+
+class CInPoint
+{
+public:
+	CTransaction* ptx;
+	unsigned int n;
+
+	CInPoint() { SetNull(); }
+	CInPoint(CTransaction* ptxIn, unsigned int nIn) { ptx = ptxIn; n = nIn; }
+	void SetNull() { ptx = NULL; n = -1; }
+	bool IsNull() const { return (ptx == NULL && n == -1); }
+};
+
 
 /// <summary>
 ///   
@@ -667,20 +688,21 @@ public:
 
 	//bool DisconnectInputs(CTxDB& txdb);
 	bool ConnectInputs(CTxDB& txdb, std::map<uint256, CTxIndex>& mapTestPool, CDiskTxPos posThisTx, int nHeight, int64& nFees, bool fBlock, bool fMiner, int64 nMinFee);
-	//bool ClientConnectInputs();
+	bool ClientConnectInputs();
 
-	//bool AcceptTransaction(CTxDB& txdb, bool fCheckInputs = true, bool* pfMissingInputs = NULL);
+	bool AcceptTransaction(CTxDB& txdb, bool fCheckInputs = true, bool* pfMissingInputs = NULL);
 
-	//bool AcceptTransaction(bool fCheckInputs = true, bool* pfMissingInputs = NULL)
-	//{
-	//	CTxDB txdb("r");
-	//	return AcceptTransaction(txdb, fCheckInputs, pfMissingInputs);
-	//}
+	bool AcceptTransaction(bool fCheckInputs = true, bool* pfMissingInputs = NULL)
+	{
+		//CTxDB txdb("r");
+		//return AcceptTransaction(txdb, fCheckInputs, pfMissingInputs);
+		return true;
+	}
 
-	//protected:
-	//	bool AddToMemoryPool();
-	//public:
-	//	bool RemoveFromMemoryPool();
+	protected:
+		bool AddToMemoryPool();
+	public:
+		bool RemoveFromMemoryPool();
 };
 
 
@@ -739,7 +761,8 @@ public:
 	int GetDepthInMainChain() const;
 	bool IsInMainChain() const { return GetDepthInMainChain() > 0; }
 	int GetBlocksToMaturity() const;
-	//bool AcceptTransaction(CTxDB& txdb, bool fCheckInputs = true);
+
+	bool AcceptTransaction(CTxDB& txdb, bool fCheckInputs = true);
 	//bool AcceptTransaction() { CTxDB txdb("r"); return AcceptTransaction(txdb); }
 };
 
@@ -801,6 +824,9 @@ public:
 		Init();
 	}
 
+	///
+	/// 
+	/// 
 
 	//bool WriteToDisk()
 	//{
@@ -810,7 +836,7 @@ public:
 	//int64 GetTxTime() const;
 	//void AddSupportingTransactions(CTxDB& txdb);
 
-	//bool AcceptWalletTransaction(CTxDB& txdb, bool fCheckInputs = true);
+	bool AcceptWalletTransaction(CTxDB& txdb, bool fCheckInputs = true);
 	//bool AcceptWalletTransaction() { CTxDB txdb("r"); return AcceptWalletTransaction(txdb); }
 
 	//void RelayWalletTransaction(CTxDB& txdb);

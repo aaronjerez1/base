@@ -11,7 +11,54 @@
 
 using namespace std;
 
+///
+/// Generate genesis block tool
+/// 
+/// Notes:
+/// A: Genesis wallet
+/// B: Genesis Block
+/// C: Hard code genesis block to in-database blocks and gensis block. 
+/// 
+vector<unsigned char> genesiswallet()
+{
+	vector<unsigned char> pubkey = GenerateNewKey();
+	return pubkey;
+}
 
+void genesisblock(vector<unsigned char> pubkey)
+{
+	// Genesis block
+	char* pszTimestamp = "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks";
+	CTransaction txNew;
+	txNew.vin.resize(1);
+	txNew.vout.resize(1);
+	txNew.vin[0].scriptSig = CScript() << 486604799 << CBigNum(4) << std::vector<unsigned char>((unsigned char*)pszTimestamp, (unsigned char*)pszTimestamp + strlen(pszTimestamp));
+	txNew.vout[0].nValue = 50 * COIN;
+	txNew.vout[0].scriptPubKey = CScript(pubkey);
+	
+	CBlock block;
+
+	block.vtx.push_back(txNew);
+
+	block.hashPrevBlock = 0;
+	block.hashMerkleRoot = block.BuildMerkleTree();
+	block.nVersion = 1;
+
+	block.nTime = 1231006505; // here you need to change the time.
+	// here you need to mine it to get thos enumbers
+	block.nBits = 0x1d00ffff; //diffulty set
+	block.nNonce = 2083236893; // nonce found
+
+	//// debug print, delete this later
+	printf("%s\n", block.GetHash().ToString().c_str());
+	printf("%s\n", block.hashMerkleRoot.ToString().c_str());
+	printf("%s\n", hashGenesisBlock.ToString().c_str());
+	txNew.vout[0].scriptPubKey.print();
+	block.print();
+	assert(block.hashMerkleRoot == uint256("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
+
+	assert(block.GetHash() == hashGenesisBlock);
+}
 
 bool LoadBlockIndex(bool fAllowNew = true)
 {
@@ -54,9 +101,9 @@ bool LoadBlockIndex(bool fAllowNew = true)
 		printf("%s\n", hashGenesisBlock.ToString().c_str());
 		txNew.vout[0].scriptPubKey.print();
 		block.print();
-		assert(block.hashMerkleRoot == uint256("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
+		//assert(block.hashMerkleRoot == uint256("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
 
-		assert(block.GetHash() == hashGenesisBlock);
+		//assert(block.GetHash() == hashGenesisBlock);
 
 		// Start new block file
 		unsigned int nFile;
@@ -78,7 +125,7 @@ int main()
 	// addrProxy
 	// 
 	// 
-	
+	genesiswallet();
 	// Load addresses, block index, and wallet.
 	string strErrors;
 	struct timespec tStart, tEnd;
@@ -104,8 +151,8 @@ int main()
 	// Load wallet
 	printf("Loading wallet...\n");
 	clock_gettime(CLOCK_MONOTONIC, &tStart);
-	if (!LoadWallet())
-		strErrors += "Error loading wallet.base      \n";
+	//if (!LoadWallet())
+	//	strErrors += "Error loading wallet.base      \n";
 	clock_gettime(CLOCK_MONOTONIC, &tEnd);
 	elapsed = (tEnd.tv_sec - tStart.tv_sec) * 1e9 + (tEnd.tv_nsec - tStart.tv_nsec);
 	printf(" wallet   %20.0f\n", elapsed);
@@ -120,7 +167,22 @@ int main()
 		printf("mapWallet.size() = %d\n", mapWallet.size());
 		printf("mapAddressBook.size() = %d\n", mapAddressBook.size());
 
+	// Add wallet transactions that aren't already in a block to mapTransactions
+	ReacceptWalletTransactions();
+
+	if (!CheckDiskSpace())
+	{
+		return 0;
+	}
+
+	//if (!StartNode(strErrors))
+	//{
+	//	return 0;
+	//}
+
 
 	CoinMiner();
+
+
 	return 0;
 }

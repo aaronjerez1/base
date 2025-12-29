@@ -11,6 +11,8 @@
 #define END(a)              ((char*)&((&(a))[1]))
 #define ARRAYLEN(array)     (sizeof(array)/sizeof((array)[0]))
 
+#define PAIRTYPE(t1, t2)    std::pair<t1, t2>
+
 
 std::string strprintf(const char* format, ...);
 bool error(const char* format, ...);
@@ -213,3 +215,25 @@ public:
 // Simple string trim function
 std::string TrimString(const std::string& str);
 void RandAddSeed(bool fPerfmon);
+
+
+// Randomize the stack to help protect against buffer overrun exploits
+#define IMPLEMENT_RANDOMIZE_STACK(ThreadFn)                         \
+    {                                                               \
+        static char nLoops;                                         \
+        if (nLoops <= 0)                                            \
+            nLoops = GetRand(50) + 1;                               \
+        if (nLoops-- > 1)                                           \
+        {                                                           \
+            ThreadFn;                                               \
+            return;                                                 \
+        }                                                           \
+    }
+
+
+#define CATCH_PRINT_EXCEPTION(pszFn)     \
+    catch (std::exception& e) {          \
+        PrintException(&e, (pszFn));     \
+    } catch (...) {                      \
+        PrintException(NULL, (pszFn));   \
+    }

@@ -27,7 +27,7 @@ bool AddAddress(CAddrDB& addrdb, const CAddress& addr);
 //void AbandonRequests(void (*fn)(void*, CDataStream&), void* param1);
 //bool AnySubscribed(unsigned int nChannel);
 //void ThreadBitcoinMiner(void* parg);
-//bool StartNode(string& strError = REF(string()));
+bool StartNode(string& strError = REF(string()));
 //bool StopNode();
 //void CheckForShutdown(int n);
 

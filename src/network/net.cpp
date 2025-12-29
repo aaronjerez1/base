@@ -29,6 +29,9 @@ CCriticalSection cs_mapRelay;
 std::map<CInv, int64> mapAlreadyAskedFor;
 
 
+void ThreadMessageHandler2(void* parg);
+
+
 
 
 bool ConnectSocket(const CAddress& addrConnect, int hSocketRet)
@@ -42,13 +45,13 @@ bool ConnectSocket(const CAddress& addrConnect, int hSocketRet)
 	/// check if the ip is public
 	bool fRoutable = !(addrConnect.GetByte(3) == 10 || (addrConnect.GetByte(3) == 192 && addrConnect.GetByte(2) == 168));
 	bool fProxy = (addrProxy.ip && fRoutable);
-	struct sockaddr_in sockaddr = (fProxy ? addrProxy.GetSockAddr() : addrConnect.GetSockAddr());
+	struct sockaddr_in sa = (fProxy ? addrProxy.GetSockAddr() : addrConnect.GetSockAddr());
 	
-	if (connect(hSocket, (struct sockaddr*)&sockaddr, sizeof(sockaddr)) == -1)
-	{
-		close(hSocket);
-		return false;
-	}
+	//if (connect(hSocket, (sockaddr*)&sa, sizeof(sa)) == -1)
+	//{
+	//	close(hSocket);
+	//	return false;
+	//} //  this is trying to connect to an external server TODO
 
 	if (fProxy)
 	{
@@ -427,4 +430,57 @@ bool StartNode(string& strError)
 
 	return true;
 
+}
+
+// HERE. actually on the task. the unit of the blockcahin is messages
+
+void ThreadMessageHandler(void* parg)
+{
+	IMPLEMENT_RANDOMIZE_STACK(ThreadMessageHandler(parg));
+
+	loop
+	{
+		vfThreadRunning[2] = true;
+		//CheckForShutdown(2);
+		//try
+		//{
+		//	ThreadMessageHandler2(parg);
+		//}
+		//CATCH_PRINT_EXCEPTION("ThreadMessageHandler()")
+		//vfThreadRunning[2] = false;
+		//Sleep(5000);
+	}
+}
+
+void ThreadMessageHandler2(void* parg)
+{
+	printf("ThreadMessageHandler started\n");
+	//SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+	loop
+	{
+		// Poll the connected nodes for messages
+		vector<CNode*> vNodesCopy;
+		CRITICAL_BLOCK(cs_vNodes)
+			vNodesCopy = vNodes;
+		for(CNode * pnode: vNodesCopy)
+		{
+			pnode->AddRef();
+
+			// Receive messages
+			TRY_CRITICAL_BLOCK(pnode->cs_vRecv)
+				//ProcessMessages(pnode);
+
+			// Send messages
+			TRY_CRITICAL_BLOCK(pnode->cs_vSend)
+				//SendMessages(pnode);
+
+			pnode->Release();
+		}
+
+		// Wait and allow messages to bunch up
+		vfThreadRunning[2] = false;
+		//Sleep(100);
+		vfThreadRunning[2] = true;
+		//CheckForShutdown(2);
+	}
 }
