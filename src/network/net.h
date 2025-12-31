@@ -26,13 +26,21 @@ bool AddAddress(CAddrDB& addrdb, const CAddress& addr);
 //CNode* ConnectNode(CAddress addrConnect, int64 nTimeout = 0);
 //void AbandonRequests(void (*fn)(void*, CDataStream&), void* param1);
 //bool AnySubscribed(unsigned int nChannel);
-//void ThreadBitcoinMiner(void* parg);
 bool StartNode(string& strError = REF(string()));
 //bool StopNode();
-//void CheckForShutdown(int n);
+void CheckForShutdown(int n);
+bool StartThread(void (*func)(void*), void* arg, int index, string& strError);
+
+void ThreadMessageHandler(void* parg);
+void ThreadOpenConnections(void* parg);
+//void ThreadBitcoinMiner(void* parg);
+
 
 extern CCriticalSection cs_mapAddresses;
 extern std::map<std::vector<unsigned char>, CAddress> mapAddresses;
+
+
+extern CAddress addrLocalHost;
 
 
 //

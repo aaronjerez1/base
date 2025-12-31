@@ -2,6 +2,9 @@
 #include <sys/stat.h>
 #include "shared/key.h"
 #include "database/walletdb/walletdb.h"
+#include "network/net.h"
+#include <algorithm> 
+
 
 // Settings
 int fGenerateBasecoins = 1; // hehe
@@ -47,6 +50,10 @@ CKey keyUser;
 std::map<std::vector<unsigned char>, CPrivKey> mapKeys; //in shared/key.h
 std::map<uint160, std::vector<unsigned char> > mapPubKeys;
 CCriticalSection cs_mapKeys;
+
+//string strSetDataDir;
+int nDropMessagesTest = 0;
+
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -443,19 +450,98 @@ void EraseOrphanTx(uint256 hash)
     mapOrphanTransactions.erase(hash);
 }
 
+bool ProcessMessages(CNode* pfrom)
+{
+    CDataStream& vRecv = pfrom->vRecv;
+    if (vRecv.empty())
+        return true;
+    printf("ProcessMessages(%d bytes)\n", vRecv.size());
+
+    //
+    // Message format
+    //  (4) message start
+    //  (12) command
+    //  (4) size
+    //  (x) data
+    //
+
+    loop
+    {
+        // Scan for message start
+        CDataStream::iterator pstart = search(vRecv.begin(), vRecv.end(), BEGIN(pchMessageStart), END(pchMessageStart));
+        if (vRecv.end() - pstart < sizeof(CMessageHeader))
+        {
+            if (vRecv.size() > sizeof(CMessageHeader))
+            {
+                printf("\n\nPROCESSMESSAGE MESSAGESTART NOT FOUND\n\n");
+                vRecv.erase(vRecv.begin(), vRecv.end() - sizeof(CMessageHeader));
+            }
+            break;
+        }
+        if (pstart - vRecv.begin() > 0)
+            printf("\n\nPROCESSMESSAGE SKIPPED %d BYTES\n\n", pstart - vRecv.begin());
+        vRecv.erase(vRecv.begin(), pstart);
+
+        // Read header
+        CMessageHeader hdr;
+        vRecv >> hdr;
+        if (!hdr.IsValid())
+        {
+            printf("\n\nPROCESSMESSAGE: ERRORS IN HEADER %s\n\n\n", hdr.GetCommand().c_str());
+            continue;
+        }
+        string strCommand = hdr.GetCommand();
+
+        // Message size
+        unsigned int nMessageSize = hdr.nMessageSize;
+        if (nMessageSize > vRecv.size())
+        {
+            // Rewind and wait for rest of message
+            ///// need a mechanism to give up waiting for overlong message size error
+            printf("MESSAGE-BREAK\n");
+            vRecv.insert(vRecv.begin(), BEGIN(hdr), END(hdr));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+            break;
+        }
+
+        // Copy message to its own buffer
+        CDataStream vMsg(vRecv.begin(), vRecv.begin() + nMessageSize, vRecv.nType, vRecv.nVersion);
+        vRecv.ignore(nMessageSize);
+
+        // Process message
+        bool fRet = false;
+        try
+        {
+            CheckForShutdown(2);
+            CRITICAL_BLOCK(cs_main)
+                fRet = ProcessMessage(pfrom, strCommand, vMsg);
+            CheckForShutdown(2);
+        }
+        CATCH_PRINT_EXCEPTION("ProcessMessage()")
+        if (!fRet)
+            printf("ProcessMessage(%s, %d bytes) from %s to %s FAILED\n", strCommand.c_str(), nMessageSize, pfrom->addr.ToString().c_str(), addrLocalHost.ToString().c_str());
+    }
+
+    vRecv.Compact();
+    return true;
+}
 
 bool ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv)
 {
     static std::map<unsigned int, vector<unsigned char> > mapReuseKey;
-    //printf("received: %-12s (%d bytes)  ", strCommand.c_str(), vRecv.size());
-    //for (int i = 0; i < std::min(vRecv.size(), (unsigned int)20); i++)
-    //    printf("%02x ", vRecv[i] & 0xff);
-    //printf("\n");
-    //if (nDropMessagesTest > 0 && GetRand(nDropMessagesTest) == 0)
-    //{
-    //    printf("dropmessages DROPPING RECV MESSAGE\n");
-    //    return true;
-    //}
+    printf("received: %-12s (%zu bytes)  ", strCommand.c_str(), vRecv.size());
+
+    for (size_t i = 0; i < std::min(vRecv.size(), size_t(20)); ++i)
+        printf("%02x ", vRecv[i] & 0xff);
+
+    printf("\n");
+
+    if (nDropMessagesTest > 0 && GetRand(nDropMessagesTest) == 0)
+    {
+        printf("dropmessages DROPPING RECV MESSAGE\n");
+        return true;
+    }
     if (strCommand == "version")
     {
     }
@@ -575,6 +661,75 @@ bool ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv)
 
 
 
+//bool SendMessages(CNode* pto)
+//{
+//    CheckForShutdown(2);
+//    CRITICAL_BLOCK(cs_main)
+//    {
+//        // Don't send anything until we get their version message
+//        if (pto->nVersion == 0)
+//            return true;
+//
+//
+//        //
+//        // Message: addr
+//        //
+//        vector<CAddress> vAddrToSend;
+//        vAddrToSend.reserve(pto->vAddrToSend.size());
+//        for(const CAddress & addr: pto->vAddrToSend)
+//            if (!pto->setAddrKnown.count(addr))
+//                vAddrToSend.push_back(addr);
+//        pto->vAddrToSend.clear();
+//        if (!vAddrToSend.empty())
+//            pto->PushMessage("addr", vAddrToSend);
+//
+//
+//        //
+//        // Message: inventory
+//        //
+//        vector<CInv> vInventoryToSend;
+//        CRITICAL_BLOCK(pto->cs_inventory)
+//        {
+//            vInventoryToSend.reserve(pto->vInventoryToSend.size());
+//            foreach(const CInv & inv, pto->vInventoryToSend)
+//            {
+//                // returns true if wasn't already contained in the set
+//                if (pto->setInventoryKnown.insert(inv).second)
+//                    vInventoryToSend.push_back(inv);
+//            }
+//            pto->vInventoryToSend.clear();
+//            pto->setInventoryKnown2.clear();
+//        }
+//        if (!vInventoryToSend.empty())
+//            pto->PushMessage("inv", vInventoryToSend);
+//
+//
+//        //
+//        // Message: getdata
+//        //
+//        vector<CInv> vAskFor;
+//        int64 nNow = GetTime() * 1000000;
+//        CTxDB txdb("r");
+//        while (!pto->mapAskFor.empty() && (*pto->mapAskFor.begin()).first <= nNow)
+//        {
+//            const CInv& inv = (*pto->mapAskFor.begin()).second;
+//            printf("sending getdata: %s\n", inv.ToString().c_str());
+//            if (!AlreadyHave(txdb, inv))
+//                vAskFor.push_back(inv);
+//            pto->mapAskFor.erase(pto->mapAskFor.begin());
+//        }
+//        if (!vAskFor.empty())
+//            pto->PushMessage("getdata", vAskFor);
+//
+//    }
+//    return true;
+//}
+
+
+
+
+
+
 //
 // CTransaction
 //
@@ -653,6 +808,13 @@ bool CTransaction::AcceptTransaction(CTxDB& txdb, bool fCheckInputs, bool* pfMis
 
     printf("AcceptTransaction(): accepted %s\n", hash.ToString().substr(0, 6).c_str());
     return true;
+}
+
+bool CTransaction::AcceptTransaction(bool fCheckInputs, bool* pfMissingInputs)
+{
+    CTxDB txdb("r");
+    return AcceptTransaction(txdb, fCheckInputs, pfMissingInputs);
+    //return true;
 }
 
 

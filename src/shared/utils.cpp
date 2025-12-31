@@ -226,3 +226,55 @@ void RandAddSeed(bool fPerfmon)
         }
     }
 }
+
+bool GetExecutablePath(char* buffer, size_t size)
+{
+    ssize_t len = readlink("/proc/self/exe", buffer, size - 1);
+    if (len == -1)
+        return false;
+
+    buffer[len] = '\0';
+    return true;
+}
+
+std::string GetModulePath()
+{
+#ifdef _WIN32
+    char path[MAX_PATH];
+    GetModuleFileNameA(nullptr, path, MAX_PATH);
+    return path;
+#else
+    char path[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+    if (len == -1)
+        return {};
+    path[len] = '\0';
+    return path;
+#endif
+}
+
+void StrToLower(char* s)
+{
+    std::transform(s, s + std::strlen(s), s,
+        [](unsigned char c) { return std::tolower(c); });
+}
+
+void PrintException(std::exception* pex, const char* pszThread)
+{
+    char pszModule[260];
+    pszModule[0] = '\0';
+    GetExecutablePath(pszModule, sizeof(pszModule));
+    StrToLower(pszModule);
+    char pszMessage[1000];
+    if (pex)
+        snprintf(pszMessage, sizeof(pszMessage),
+            "EXCEPTION: %s       \n%s       \n%s in %s       \n", typeid(*pex).name(), pex->what(), pszModule, pszThread);
+    else
+        snprintf(pszMessage, sizeof(pszMessage),
+            "UNKNOWN EXCEPTION       \n%s in %s       \n", pszModule, pszThread);
+    printf("\n\n************************\n%s", pszMessage);
+    //if (wxTheApp)
+    //    wxMessageBox(pszMessage, "Error", wxOK | wxICON_ERROR);
+    throw;
+    //DebugBreak();
+}

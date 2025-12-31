@@ -8,6 +8,8 @@
 #include "database/walletdb/walletdb.h"
 
 #include "globals.h"
+#include <net.h>
+
 
 using namespace std;
 
@@ -119,7 +121,7 @@ bool LoadBlockIndex(bool fAllowNew = true)
 
 
 
-int main()
+int main(int argc, char** argv)
 {
 	// data dir?
 	// addrProxy
@@ -175,10 +177,10 @@ int main()
 		return 0;
 	}
 
-	//if (!StartNode(strErrors))
-	//{
-	//	return 0;
-	//}
+	if (!StartNode(strErrors))
+	{
+		return 0;
+	}
 
 
 	CoinMiner();

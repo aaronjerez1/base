@@ -606,6 +606,22 @@ public:
         }
     }
 
+    // overload 2
+//#if !defined(_MSC_VER) || _MSC_VER >= 1300
+
+    void insert(iterator it, const char* first, const char* last)
+    {
+        if (it == vch.begin() + nReadPos && last - first <= nReadPos)
+        {
+            // special case for inserting at the front when there's room
+            nReadPos -= (last - first);
+            memcpy(&vch[nReadPos], &first[0], last - first);
+        }
+        else
+            vch.insert(it, first, last);
+    }
+//#endif
+
     iterator erase(iterator it)
     {
         if (it == vch.begin() + nReadPos)

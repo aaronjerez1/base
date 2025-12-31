@@ -98,8 +98,8 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast);
 void ReacceptWalletTransactions();
 bool CheckDiskSpace(int64 nAdditionalBytes = 0);
 
+bool ProcessMessages(CNode* pfrom);
 bool ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv);
-
 	
 class CDiskTxPos
 {
@@ -692,12 +692,7 @@ public:
 
 	bool AcceptTransaction(CTxDB& txdb, bool fCheckInputs = true, bool* pfMissingInputs = NULL);
 
-	bool AcceptTransaction(bool fCheckInputs = true, bool* pfMissingInputs = NULL)
-	{
-		//CTxDB txdb("r");
-		//return AcceptTransaction(txdb, fCheckInputs, pfMissingInputs);
-		return true;
-	}
+	bool AcceptTransaction(bool fCheckInputs = true, bool* pfMissingInputs = NULL);
 
 	protected:
 		bool AddToMemoryPool();

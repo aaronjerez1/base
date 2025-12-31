@@ -5,6 +5,14 @@
 //#include "../database/walletdb/walletdb.h"
 #include <netdb.h>
 #include "../database/addressdb/addressdb.h"
+
+//#define WIN32_LEAN_AND_MEAN
+//#include <winsock2.h>
+//#include <windows.h>
+//
+//#pragma comment(lib, "Ws2_32.lib")
+
+
 //
 // Global state variables
 //
@@ -19,11 +27,11 @@ CAddress addrProxy;
 
 
 std::array<bool, 10> vfThreadRunning;
-std::vector<CNode*> vNodes;
-CCriticalSection cs_vNodes;
+std::vector<CNode*> vNodes; //HERE
+CCriticalSection cs_vNodes; // HERE
 CCriticalSection cs_mapAddresses;
 std::map<std::vector<unsigned char>, CAddress> mapAddresses;
-//std::map<CInv, CDataStream> mapRelay;
+std::map<CInv, CDataStream> mapRelay;
 std::deque<std::pair<int64, CInv> > vRelayExpiration;
 CCriticalSection cs_mapRelay;
 std::map<CInv, int64> mapAlreadyAskedFor;
@@ -413,11 +421,11 @@ bool StartNode(string& strError)
 
 	std::string threadError;
 	// Get addresses from IRC and advertise ours
-	if (!StartThread(ThreadIRCSeed, NULL, 1, threadError))
-	{
-		printf("Error: StartThread(ThreadIRCSeed) failed: %s\n", threadError.c_str());
-		return false;
-	}
+	//if (!StartThread(ThreadIRCSeed, NULL, 1, threadError))
+	//{
+	//	printf("Error: StartThread(ThreadIRCSeed) failed: %s\n", threadError.c_str());
+	//	return false;
+	//} // TODO
 
 	// Start Threads
 
@@ -426,13 +434,188 @@ bool StartNode(string& strError)
 	//	printf("%s\n", strError.c_str());
 	//	return false;
 	//}
+	if (!StartThread(ThreadMessageHandler, new int(hListenSocket), 0, threadError)) {
+		strError = "Error: StartThread(ThreadMessageHandler) failed: " + threadError;
+		printf("%s\n", strError.c_str());
+		return false;
+	}
 
 
 	return true;
 
 }
 
-// HERE. actually on the task. the unit of the blockcahin is messages
+
+
+
+// ThreadOpenConnections
+
+void ThreadOpenConnections(void* parg)
+{
+	IMPLEMENT_RANDOMIZE_STACK(ThreadOpenConnections(parg));
+
+	loop
+	{
+		vfThreadRunning[1] = true;
+		CheckForShutdown(1);
+		try
+		{
+			ThreadOpenConnections2(parg);
+		}
+		CATCH_PRINT_EXCEPTION("ThreadOpenConnections()")
+		vfThreadRunning[1] = false;
+		std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+	}
+}
+
+
+
+void ThreadOpenConnections2(void* parg)
+{
+	printf("ThreadOpenConnections started\n");
+
+	// Initiate network connections
+	int nTry = 0;
+	bool fIRCOnly = false;
+	const int nMaxConnections = 15;
+	loop
+	{
+		// Wait
+		vfThreadRunning[1] = false;
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+		while (vNodes.size() >= nMaxConnections || vNodes.size() >= mapAddresses.size())
+		{
+			CheckForShutdown(1);
+			std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+		}
+		vfThreadRunning[1] = true;
+		CheckForShutdown(1);
+
+
+		//
+		// The IP selection process is designed to limit vulnerability to address flooding.
+		// Any class C (a.b.c.?) has an equal chance of being chosen, then an IP is
+		// chosen within the class C.  An attacker may be able to allocate many IPs, but
+		// they would normally be concentrated in blocks of class C's.  They can hog the
+		// attention within their class C, but not the whole IP address space overall.
+		// A lone node in a class C will get as much attention as someone holding all 255
+		// IPs in another class C.
+		//
+
+		// Every other try is with IRC addresses only
+		fIRCOnly = !fIRCOnly;
+		if (mapIRCAddresses.empty())
+			fIRCOnly = false;
+		else if (nTry++ < 30 && vNodes.size() < nMaxConnections / 2)
+			fIRCOnly = true;
+
+		// Make a list of unique class C's
+		unsigned char pchIPCMask[4] = { 0xff, 0xff, 0xff, 0x00 };
+		unsigned int nIPCMask = *(unsigned int*)pchIPCMask;
+		vector<unsigned int> vIPC;
+		CRITICAL_BLOCK(cs_mapIRCAddresses)
+		CRITICAL_BLOCK(cs_mapAddresses)
+		{
+			vIPC.reserve(mapAddresses.size());
+			unsigned int nPrev = 0;
+			for(const PAIRTYPE(vector<unsigned char>, CAddress) & item : mapAddresses)
+			{
+				const CAddress& addr = item.second;
+				if (!addr.IsIPv4())
+					continue;
+				if (fIRCOnly && !mapIRCAddresses.count(item.first))
+					continue;
+
+				// Taking advantage of mapAddresses being in sorted order,
+				// with IPs of the same class C grouped together.
+				unsigned int ipC = addr.ip & nIPCMask;
+				if (ipC != nPrev)
+					vIPC.push_back(nPrev = ipC);
+			}
+		}
+		if (vIPC.empty())
+			continue;
+
+		// Choose a random class C
+		unsigned int ipC = vIPC[GetRand(vIPC.size())];
+
+		// Organize all addresses in the class C by IP
+		std::map<unsigned int, vector<CAddress> > mapIP;
+		CRITICAL_BLOCK(cs_mapIRCAddresses)
+		CRITICAL_BLOCK(cs_mapAddresses)
+		{
+			int64 nDelay = ((30 * 60) << vNodes.size());
+			if (!fIRCOnly)
+			{
+				nDelay *= 2;
+				if (vNodes.size() >= 3)
+					nDelay *= 4;
+				if (!mapIRCAddresses.empty())
+					nDelay *= 100;
+			}
+
+			for (std::map<vector<unsigned char>, CAddress>::iterator mi = mapAddresses.lower_bound(CAddress(ipC, 0).GetKey());
+				 mi != mapAddresses.upper_bound(CAddress(ipC | ~nIPCMask, 0xffff).GetKey());
+				 ++mi)
+			{
+				const CAddress& addr = (*mi).second;
+				if (fIRCOnly && !mapIRCAddresses.count((*mi).first))
+					continue;
+
+				int64 nRandomizer = (addr.nLastFailed * addr.ip * 7777U) % 20000;
+				if (GetTime() - addr.nLastFailed > nDelay * nRandomizer / 10000)
+					mapIP[addr.ip].push_back(addr);
+			}
+		}
+		if (mapIP.empty())
+			continue;
+
+		// Choose a random IP in the class C
+		std::map<unsigned int, vector<CAddress> >::iterator mi = mapIP.begin();
+		advance(mi, GetRand(mapIP.size()));
+
+		// Once we've chosen an IP, we'll try every given port before moving on
+		for(const CAddress & addrConnect: (*mi).second)
+		{
+			//
+			// Initiate outbound network connection
+			//
+			CheckForShutdown(1);
+			if (addrConnect.ip == addrLocalHost.ip || !addrConnect.IsIPv4() || FindNode(addrConnect.ip))
+				continue;
+
+			vfThreadRunning[1] = false;
+			CNode* pnode = ConnectNode(addrConnect);
+			vfThreadRunning[1] = true;
+			CheckForShutdown(1);
+			if (!pnode)
+				continue;
+			pnode->fNetworkNode = true;
+
+			if (addrLocalHost.IsRoutable())
+			{
+				// Advertise our address
+				vector<CAddress> vAddrToSend;
+				vAddrToSend.push_back(addrLocalHost);
+				pnode->PushMessage("addr", vAddrToSend);
+			}
+
+			// Get as many addresses as we can
+			pnode->PushMessage("getaddr");
+
+			////// should the one on the receiving end do this too?
+			// Subscribe our local subscription list
+			const unsigned int nHops = 0;
+			for (unsigned int nChannel = 0; nChannel < pnodeLocalHost->vfSubscribe.size(); nChannel++)
+				if (pnodeLocalHost->vfSubscribe[nChannel])
+					pnode->PushMessage("subscribe", nChannel, nHops);
+
+			break;
+		}
+	}
+}
+
+// HERE. actually on the task. the unit of the blockcahin is messages and threads?
 
 void ThreadMessageHandler(void* parg)
 {
@@ -441,14 +624,14 @@ void ThreadMessageHandler(void* parg)
 	loop
 	{
 		vfThreadRunning[2] = true;
-		//CheckForShutdown(2);
-		//try
-		//{
-		//	ThreadMessageHandler2(parg);
-		//}
-		//CATCH_PRINT_EXCEPTION("ThreadMessageHandler()")
-		//vfThreadRunning[2] = false;
-		//Sleep(5000);
+		CheckForShutdown(2);
+		try
+		{
+			ThreadMessageHandler2(parg);
+		}
+		CATCH_PRINT_EXCEPTION("ThreadMessageHandler()")
+		vfThreadRunning[2] = false;
+		std::this_thread::sleep_for(std::chrono::milliseconds(5000));
 	}
 }
 
@@ -468,7 +651,7 @@ void ThreadMessageHandler2(void* parg)
 
 			// Receive messages
 			TRY_CRITICAL_BLOCK(pnode->cs_vRecv)
-				//ProcessMessages(pnode);
+				ProcessMessages(pnode);  //HERE
 
 			// Send messages
 			TRY_CRITICAL_BLOCK(pnode->cs_vSend)
@@ -481,6 +664,24 @@ void ThreadMessageHandler2(void* parg)
 		vfThreadRunning[2] = false;
 		//Sleep(100);
 		vfThreadRunning[2] = true;
-		//CheckForShutdown(2);
+		CheckForShutdown(2);
+	}
+}
+
+
+void CheckForShutdown(int n)
+{
+	if (fShutdown)
+	{
+		if (n != -1)
+			vfThreadRunning[n] = false;
+		if (n == 0)
+			for (CNode* pnode : vNodes)
+			{
+				shutdown(pnode->hSocket, SHUT_RDWR); // unblock recv/send
+				close(pnode->hSocket);
+			}
+
+		pthread_exit(nullptr);
 	}
 }

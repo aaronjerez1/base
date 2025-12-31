@@ -216,6 +216,9 @@ public:
 std::string TrimString(const std::string& str);
 void RandAddSeed(bool fPerfmon);
 
+void PrintException(std::exception* pex, const char* pszThread);
+
+
 
 // Randomize the stack to help protect against buffer overrun exploits
 #define IMPLEMENT_RANDOMIZE_STACK(ThreadFn)                         \
