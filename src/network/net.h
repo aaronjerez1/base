@@ -9,6 +9,8 @@
 
 class CAddress;
 class CAddrDB;
+class CNode;
+
 
 static const unsigned short DEFAULT_PORT = htons(8333);
 static const unsigned int PUBLISH_HOPS = 5;
@@ -17,13 +19,13 @@ enum
 	NODE_NETWORK = (1 << 0),
 };
 
-bool ConnectSocket(const CAddress& addrConnect, int hSocketRet);
+bool ConnectSocket(const CAddress& addrConnect, int& hSocketRet);
 bool AddAddress(CAddrDB& addrdb, const CAddress& addr);
 
 //bool GetMyExternalIP(unsigned int& ipRet);
 //bool AddAddress(CAddrDB& addrdb, const CAddress& addr);
-//CNode* FindNode(unsigned int ip);
-//CNode* ConnectNode(CAddress addrConnect, int64 nTimeout = 0);
+CNode* FindNode(unsigned int ip);
+CNode* ConnectNode(CAddress addrConnect, int64 nTimeout = 0);
 //void AbandonRequests(void (*fn)(void*, CDataStream&), void* param1);
 //bool AnySubscribed(unsigned int nChannel);
 bool StartNode(string& strError = REF(string()));
@@ -249,6 +251,14 @@ public:
 		sockaddr.sin_port = port;
 		return sockaddr;
 	}
+	//struct sockaddr_in GetSockAddr() const
+	//{
+	//	struct sockaddr_in sa {};
+	//	sa.sin_family = AF_INET;
+	//	sa.sin_addr.s_addr = ip;          // see note below about ip order
+	//	sa.sin_port = htons(port);        // ? key fix
+	//	return sa;
+	//}
 	
 	bool IsIPv4() const
 	{
@@ -442,6 +452,7 @@ public:
 	bool fDisconnect;
 protected:
 	int nRefCount;
+public:
 	int64 nReleaseTime;
 	std::map<uint256, CRequestTracker> mapRequests;
 	CCriticalSection cs_mapRequests;

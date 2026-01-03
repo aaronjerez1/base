@@ -13,6 +13,11 @@
 //#pragma comment(lib, "Ws2_32.lib")
 
 
+void ThreadMessageHandler2(void* parg);
+//void ThreadSocketHandler2(void* parg);
+void ThreadOpenConnections2(void* parg);
+
+
 //
 // Global state variables
 //
@@ -20,8 +25,8 @@
 bool fClient = false;
 uint64 nLocalServices = (fClient ? 0 : NODE_NETWORK);
 CAddress addrLocalHost(0, DEFAULT_PORT, nLocalServices);
-//CNode nodeLocalHost(-1, CAddress("127.0.0.1", nLocalServices));
-//CNode* pnodeLocalHost = &nodeLocalHost;
+CNode nodeLocalHost(-1, CAddress("127.0.0.1", nLocalServices));
+CNode* pnodeLocalHost = &nodeLocalHost;
 bool fShutdown = false;
 CAddress addrProxy;
 
@@ -37,12 +42,10 @@ CCriticalSection cs_mapRelay;
 std::map<CInv, int64> mapAlreadyAskedFor;
 
 
-void ThreadMessageHandler2(void* parg);
 
 
 
-
-bool ConnectSocket(const CAddress& addrConnect, int hSocketRet)
+bool ConnectSocket(const CAddress& addrConnect, int& hSocketRet)
 {
 	hSocketRet = -1;
 
@@ -60,6 +63,24 @@ bool ConnectSocket(const CAddress& addrConnect, int hSocketRet)
 	//	close(hSocket);
 	//	return false;
 	//} //  this is trying to connect to an external server TODO
+
+	printf("addrConnect.ip=%u port=%u (host order?)\n", addrConnect.ip, addrConnect.port);
+
+	sockaddr_in sa2 = addrConnect.GetSockAddr();
+	printf("sockaddr port (network order)=%u\n", (unsigned)sa2.sin_port);
+
+	printf("ConnectSocket: connecting to %s\n", addrConnect.ToString().c_str());
+	fflush(stdout);
+
+	errno = 0;
+	int rc = connect(hSocket, (sockaddr*)&sa, sizeof(sa));
+	printf("ConnectSocket: connect rc=%d errno=%d (%s)\n", rc, errno, strerror(errno));
+	fflush(stdout);
+
+	if (rc == -1) {
+		close(hSocket);
+		return false;
+	}
 
 	if (fProxy)
 	{
@@ -332,6 +353,30 @@ bool StartThread(void (*func)(void*), void* arg, int index, string& strError)
 	return true;
 }
 
+static const char* STATIC_SEEDS[] = {
+	"127.0.0.1:8333",      // local testing
+	// "127.0.0.1:8334",   // second local node
+	// "YOUR.VPS.IP:8333", // future seed
+};
+
+static const int NUM_STATIC_SEEDS =
+sizeof(STATIC_SEEDS) / sizeof(STATIC_SEEDS[0]);
+
+
+extern std::vector<CAddress> vConnect;
+extern CCriticalSection cs_vConnect;
+
+static void AddStaticSeeds()
+{
+	CRITICAL_BLOCK(cs_vConnect);
+	for (int i = 0; i < NUM_STATIC_SEEDS; ++i)
+	{
+		CAddress addr(STATIC_SEEDS[i]);
+		printf("Adding static seed %s\n", addr.ToString().c_str());
+		vConnect.push_back(addr);
+	}
+}
+
 #include "../database/walletdb/walletdb.h"
 bool StartNode(string& strError)
 {
@@ -421,11 +466,13 @@ bool StartNode(string& strError)
 
 	std::string threadError;
 	// Get addresses from IRC and advertise ours
-	//if (!StartThread(ThreadIRCSeed, NULL, 1, threadError))
-	//{
-	//	printf("Error: StartThread(ThreadIRCSeed) failed: %s\n", threadError.c_str());
-	//	return false;
-	//} // TODO
+	AddStaticSeeds();
+	if (!StartThread(ThreadIRCSeed, &vConnect, 1, threadError))
+	{
+		printf("Error: StartThread(ThreadIRCSeed) failed: %s\n", threadError.c_str());
+		return false;
+	} // TODO
+
 
 	// Start Threads
 
@@ -434,6 +481,13 @@ bool StartNode(string& strError)
 	//	printf("%s\n", strError.c_str());
 	//	return false;
 	//}
+
+	if (!StartThread(ThreadOpenConnections, new int(hListenSocket), 0, threadError)) {
+		strError = "Error: StartThread(ThreadOpenConnections2) failed: " + threadError;
+		printf("%s\n", strError.c_str());
+		return false;
+	}
+
 	if (!StartThread(ThreadMessageHandler, new int(hListenSocket), 0, threadError)) {
 		strError = "Error: StartThread(ThreadMessageHandler) failed: " + threadError;
 		printf("%s\n", strError.c_str());
@@ -441,11 +495,93 @@ bool StartNode(string& strError)
 	}
 
 
+
 	return true;
 
 }
 
 
+
+
+
+
+
+
+CNode* FindNode(unsigned int ip)
+{
+	CRITICAL_BLOCK(cs_vNodes)
+	{
+		for(CNode * pnode: vNodes)
+			if (pnode->addr.ip == ip)
+				return (pnode);
+	}
+	return NULL;
+}
+
+CNode* FindNode(CAddress addr)
+{
+	CRITICAL_BLOCK(cs_vNodes)
+	{
+		for(CNode * pnode: vNodes)
+			if (pnode->addr == addr)
+				return (pnode);
+	}
+	return NULL;
+}
+
+CNode* ConnectNode(CAddress addrConnect, int64 nTimeout) // HERE
+{
+	if (addrConnect.ip == addrLocalHost.ip)
+		return NULL;
+
+	// Look for an existing connection
+	CNode* pnode = FindNode(addrConnect.ip);
+	if (pnode)
+	{
+		if (nTimeout != 0)
+			pnode->AddRef(nTimeout);
+		else
+			pnode->AddRef();
+		return pnode;
+	}
+
+	/// debug print
+	printf("trying %s\n", addrConnect.ToString().c_str());
+
+	// Connect
+	int hSocket = -1;
+	if (ConnectSocket(addrConnect, hSocket))
+	{
+		/// debug print
+		printf("connected %s\n", addrConnect.ToString().c_str());
+
+		// Set to non-blocking
+		int flags = fcntl(hSocket, F_GETFL, 0);
+		if (flags == -1 || fcntl(hSocket, F_SETFL, flags | O_NONBLOCK) == -1)
+		{
+			printf("ConnectSocket() : fcntl nonblocking setting failed, error %d\n", errno);
+		}
+
+		// Add node
+		CNode* pnode = new CNode(hSocket, addrConnect, false);
+		if (nTimeout != 0)
+			pnode->AddRef(nTimeout);
+		else
+			pnode->AddRef();
+		CRITICAL_BLOCK(cs_vNodes)
+			vNodes.push_back(pnode);
+
+		CRITICAL_BLOCK(cs_mapAddresses)
+			mapAddresses[addrConnect.GetKey()].nLastFailed = 0;
+		return pnode;
+	}
+	else
+	{
+		CRITICAL_BLOCK(cs_mapAddresses)
+			mapAddresses[addrConnect.GetKey()].nLastFailed = GetTime();
+		return NULL;
+	}
+}
 
 
 // ThreadOpenConnections
@@ -540,7 +676,7 @@ void ThreadOpenConnections2(void* parg)
 		unsigned int ipC = vIPC[GetRand(vIPC.size())];
 
 		// Organize all addresses in the class C by IP
-		std::map<unsigned int, vector<CAddress> > mapIP;
+		std::map<unsigned int, vector<CAddress> > mapIP; // OHH it gets it form the IRC seed.
 		CRITICAL_BLOCK(cs_mapIRCAddresses)
 		CRITICAL_BLOCK(cs_mapAddresses)
 		{

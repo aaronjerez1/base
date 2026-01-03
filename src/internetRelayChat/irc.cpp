@@ -173,6 +173,8 @@ void ThreadIRCSeed(void* parg)
         else
             addrConnect = CAddress("irc.libera.chat:6697");
 
+
+
         int hSocket;
         if (!ConnectSocket(addrConnect, hSocket))
         {
@@ -194,10 +196,11 @@ void ThreadIRCSeed(void* parg)
                 return;
         }
         
-        sleep(500);
+        //sleep(500);
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-        Send(hSocket, "JOIN #bitcoin\r");
-        Send(hSocket, "WHO #bitcoin\r");
+        Send(hSocket, "JOIN #basecoin222\r\n");
+        Send(hSocket, "WHO #basecoin222\r\n");
 
         int64 nStart = GetTime();
         string strLine;
