@@ -13,6 +13,11 @@ set(CMAKE_TOOLCHAIN_FILE "/home/aaron/vcpkg/scripts/buildsystems/vcpkg.cmake" CA
  
 project ("base")
 
+# Set C++20 as the default standard for all targets
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 # Add source to this project's executable.
 
 add_subdirectory(src)
@@ -20,10 +25,7 @@ add_subdirectory(src)
 
 
 
-# Set C++20 as the default standard for all targets
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+
 
 
 

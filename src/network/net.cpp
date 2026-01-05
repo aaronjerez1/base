@@ -363,19 +363,19 @@ static const int NUM_STATIC_SEEDS =
 sizeof(STATIC_SEEDS) / sizeof(STATIC_SEEDS[0]);
 
 
-extern std::vector<CAddress> vConnect;
-extern CCriticalSection cs_vConnect;
-
-static void AddStaticSeeds()
-{
-	CRITICAL_BLOCK(cs_vConnect);
-	for (int i = 0; i < NUM_STATIC_SEEDS; ++i)
-	{
-		CAddress addr(STATIC_SEEDS[i]);
-		printf("Adding static seed %s\n", addr.ToString().c_str());
-		vConnect.push_back(addr);
-	}
-}
+//extern std::vector<CAddress> vConnect;
+//extern CCriticalSection cs_vConnect;
+//
+//static void AddStaticSeeds()
+//{
+//	CRITICAL_BLOCK(cs_vConnect);
+//	for (int i = 0; i < NUM_STATIC_SEEDS; ++i)
+//	{
+//		CAddress addr(STATIC_SEEDS[i]);
+//		printf("Adding static seed %s\n", addr.ToString().c_str());
+//		vConnect.push_back(addr);
+//	}
+//}
 
 #include "../database/walletdb/walletdb.h"
 bool StartNode(string& strError)
@@ -466,8 +466,8 @@ bool StartNode(string& strError)
 
 	std::string threadError;
 	// Get addresses from IRC and advertise ours
-	AddStaticSeeds();
-	if (!StartThread(ThreadIRCSeed, &vConnect, 1, threadError))
+	//AddStaticSeeds();
+	if (!StartThread(ThreadIRCSeed, NULL, 1, threadError))
 	{
 		printf("Error: StartThread(ThreadIRCSeed) failed: %s\n", threadError.c_str());
 		return false;
