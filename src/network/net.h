@@ -35,6 +35,7 @@ bool StartThread(void (*func)(void*), void* arg, int index, string& strError);
 
 void ThreadMessageHandler(void* parg);
 void ThreadOpenConnections(void* parg);
+void ThreadSocketHandler(void* parg);
 //void ThreadBitcoinMiner(void* parg);
 
 
@@ -417,6 +418,11 @@ class CNode;
 
 extern std::vector<CNode*> vNodes;
 extern CCriticalSection cs_vNodes;
+
+
+extern std::vector<CAddress> vConnect;
+extern CCriticalSection cs_vConnect;
+
 extern std::map<CInv, CDataStream> mapRelay;
 extern std::deque<std::pair<int64, CInv> > vRelayExpiration;
 extern CCriticalSection cs_mapRelay;
@@ -433,7 +439,7 @@ extern bool fClient;
 
 extern std::map<CInv, int64> mapAlreadyAskedFor;
 
-class CNode
+class  CNode
 {
 public:
 	// socket
@@ -443,6 +449,7 @@ public:
 	CDataStream vRecv;
 	CCriticalSection cs_vSend; // with its critical section
 	CCriticalSection cs_vRecv;
+	CCriticalSection cs_vConnect;
 	unsigned int nPushPos;
 	CAddress addr;
 	int nVersion;
@@ -460,6 +467,9 @@ public:
 	// flood
 	std::vector<CAddress> vAddrToSend;
 	std::set<CAddress> setAddrKnown;
+
+	// nodes
+
 
 	// inventory based relay
 	std::set<CInv> setInventoryKnown;
@@ -504,6 +514,9 @@ private:
 	CNode(const CNode&);
 	void operator=(const CNode&);
 public:
+
+	//void AddDNSSeeds();
+	//void ThreadDNSSeed(void* parg);
 
 	int GetRefCount()
 	{

@@ -278,3 +278,69 @@ void PrintException(std::exception* pex, const char* pszThread)
     throw;
     //DebugBreak();
 }
+
+
+//#include <stdint.h>
+//#include <string.h>
+//#include <time.h>
+//#include <stdio.h>
+//
+//#include <openssl/rand.h>
+//#include <openssl/sha.h>
+//
+//#if defined(__linux__)
+//#include <sys/random.h>   // getrandom
+//#include <errno.h>
+//#endif
+//
+//static void RandAddSeedLinux(bool fPerfmon)
+//{
+//    // Stir at most every 5 minutes unless forced
+//    static int64 nLast = 0;
+//    if (!fPerfmon && GetTime() <= nLast + 5 * 60)
+//        return;
+//    nLast = GetTime();
+//
+//#if defined(__linux__)
+//    // 1) Pull from kernel CSPRNG (best source)
+//    unsigned char buf[64];
+//    ssize_t n = getrandom(buf, sizeof(buf), 0);
+//
+//    if (n > 0)
+//    {
+//        // Hash it first so we don't feed raw kernel bytes around the codebase
+//        unsigned char h[32];
+//        SHA256(buf, (size_t)n, h);
+//
+//        // credit <= 0.0 unless you are absolutely certain (we aren't)
+//        // OpenSSL already seeds itself from getrandom/urandom; this is just extra stirring.
+//        RAND_add(h, sizeof(h), 0.0);
+//
+//        // wipe
+//        OPENSSL_cleanse(buf, sizeof(buf));
+//        OPENSSL_cleanse(h, sizeof(h));
+//    }
+//    else
+//    {
+//        // If getrandom fails (rare), we just skip silently.
+//        // errno can be EINTR, EAGAIN on very early boot, etc.
+//        // printf("RandAddSeed: getrandom failed errno=%d\n", errno);
+//    }
+//#else
+//    (void)fPerfmon; // non-linux: no-op or provide alternative
+//#endif
+//
+//    // Optional: log similar to your old function
+//    time_t t = time(nullptr);
+//    struct tm tm {};
+//    gmtime_r(&t, &tm);
+//    char ts[64];
+//    strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &tm);
+//    printf("%s  RandAddSeed() stirred entropy\n", ts);
+//}
+//
+//// Keep the old name/signature so the rest of the code compiles
+//void RandAddSeed(bool fPerfmon)
+//{
+//    RandAddSeedLinux(fPerfmon);
+//}

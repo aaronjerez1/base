@@ -14,7 +14,7 @@
 
 
 void ThreadMessageHandler2(void* parg);
-//void ThreadSocketHandler2(void* parg);
+void ThreadSocketHandler2(void* parg);
 void ThreadOpenConnections2(void* parg);
 
 
@@ -32,10 +32,20 @@ CAddress addrProxy;
 
 
 std::array<bool, 10> vfThreadRunning;
+
+//std::vector<
+
+
 std::vector<CNode*> vNodes; //HERE
 CCriticalSection cs_vNodes; // HERE
+
+std::vector<CAddress> vConnect; // NEW DNS address resolution.
+CCriticalSection cs_vConnect;
+
 CCriticalSection cs_mapAddresses;
 std::map<std::vector<unsigned char>, CAddress> mapAddresses;
+
+
 std::map<CInv, CDataStream> mapRelay;
 std::deque<std::pair<int64, CInv> > vRelayExpiration;
 CCriticalSection cs_mapRelay;
@@ -43,6 +53,62 @@ std::map<CInv, int64> mapAlreadyAskedFor;
 
 
 
+bool Wait(int seconds)
+{
+	const int checkIntervalMs = 200; // check shutdown 5x per second
+	int remainingMs = seconds * 1000;
+
+	while (remainingMs > 0)
+	{
+		if (fShutdown)
+			return false;
+
+		int sleepMs = std::min(checkIntervalMs, remainingMs);
+		std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
+		remainingMs -= sleepMs;
+	}
+
+	return !fShutdown;
+}
+
+
+
+
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+static bool LookupDNSSeed(const char* seed, std::vector<uint32_t>& outIPs)
+{
+	outIPs.clear();
+
+	addrinfo hints{};
+	hints.ai_family = AF_INET;        // IPv4 only for now
+	hints.ai_socktype = SOCK_STREAM;
+
+	addrinfo* res = nullptr;
+	int rc = getaddrinfo(seed, nullptr, &hints, &res);
+	if (rc != 0 || !res)
+		return false;
+
+	for (addrinfo* p = res; p; p = p->ai_next)
+	{
+		if (!p->ai_addr || p->ai_addrlen < (int)sizeof(sockaddr_in))
+			continue;
+
+		sockaddr_in* sa = (sockaddr_in*)p->ai_addr;
+		uint32_t ip = sa->sin_addr.s_addr;   // network order
+		outIPs.push_back(ip);
+	}
+
+	freeaddrinfo(res);
+
+	// de-dupe
+	std::sort(outIPs.begin(), outIPs.end());
+	outIPs.erase(std::unique(outIPs.begin(), outIPs.end()), outIPs.end());
+
+	return !outIPs.empty();
+}
 
 
 bool ConnectSocket(const CAddress& addrConnect, int& hSocketRet)
@@ -58,11 +124,11 @@ bool ConnectSocket(const CAddress& addrConnect, int& hSocketRet)
 	bool fProxy = (addrProxy.ip && fRoutable);
 	struct sockaddr_in sa = (fProxy ? addrProxy.GetSockAddr() : addrConnect.GetSockAddr());
 	
-	//if (connect(hSocket, (sockaddr*)&sa, sizeof(sa)) == -1)
-	//{
-	//	close(hSocket);
-	//	return false;
-	//} //  this is trying to connect to an external server TODO
+	if (connect(hSocket, (sockaddr*)&sa, sizeof(sa)) == -1)
+	{
+		close(hSocket);
+		return false;
+	} //  this is trying to connect to an external server TODO
 
 	printf("addrConnect.ip=%u port=%u (host order?)\n", addrConnect.ip, addrConnect.port);
 
@@ -377,6 +443,154 @@ sizeof(STATIC_SEEDS) / sizeof(STATIC_SEEDS[0]);
 //	}
 //}
 
+// DNS
+
+static const char* DNS_SEEDS[] = {
+	"seed1.byte-chain.com",
+	"seed0.byte-chain.com"
+};
+static const int NUM_DNS_SEEDS = sizeof(DNS_SEEDS) / sizeof(DNS_SEEDS[0]);
+
+
+
+void AddDNSSeeds()
+{
+	for (const char* seed : DNS_SEEDS)
+	{
+		addrinfo hints{};
+		hints.ai_family = AF_INET;
+		hints.ai_socktype = SOCK_STREAM;
+
+		addrinfo* res = nullptr;
+		if (getaddrinfo(seed, nullptr, &hints, &res) != 0)
+			continue;
+
+		for (addrinfo* p = res; p; p = p->ai_next)
+		{
+			sockaddr_in* sa = (sockaddr_in*)p->ai_addr;
+			CAddress addr(sa->sin_addr.s_addr, DEFAULT_PORT);
+
+			if (!addr.IsRoutable())
+				continue;
+
+			CRITICAL_BLOCK(cs_vConnect);
+			vConnect.push_back(addr);
+		}
+
+		freeaddrinfo(res);
+	}
+}
+
+
+void ThreadDNSSeed(void* parg)
+{
+	// keep your thread scheduling/priority behavior
+	pthread_t current_thread = pthread_self();
+	struct sched_param param;
+	int policy;
+	pthread_getschedparam(current_thread, &policy, &param);
+	param.sched_priority = 0;
+	pthread_setschedparam(current_thread, SCHED_OTHER, &param);
+
+	int nErrorWait = 10;
+	int nRetryWait = 10;
+
+	while (!fShutdown)
+	{
+		bool fAnySuccess = false;
+		int64 nStart = GetTime();
+
+		for (int i = 0; i < NUM_DNS_SEEDS && !fShutdown; ++i)
+		{
+			const char* seed = DNS_SEEDS[i];
+			printf("DNS seed: resolving %s\n", seed);
+
+			std::vector<uint32_t> ips;
+			if (!LookupDNSSeed(seed, ips))
+			{
+				printf("DNS seed: resolve failed for %s\n", seed);
+				continue;
+			}
+
+			printf("DNS seed: %s returned %u IPs\n", seed, (unsigned)ips.size());
+
+			// Convert to CAddress and add to addr DB (mapAddresses) like IRC thread did
+			for (uint32_t ip : ips)
+			{
+				// Your CAddress stores port in network order.
+				// DEFAULT_PORT in your codebase should match that convention.
+				CAddress addr(ip, DEFAULT_PORT);
+
+				if (!addr.IsRoutable())
+					continue;
+
+				// Add to addrman/mapAddresses through the same path you used
+				CAddrDB addrdb;
+				if (AddAddress(addrdb, addr))
+				{
+					printf("DNS seed: new ");
+				}
+				else
+				{
+					// same trick as IRC: make it try connecting again
+					CRITICAL_BLOCK(cs_mapAddresses)
+						if (mapAddresses.count(addr.GetKey()))
+							mapAddresses[addr.GetKey()].nLastFailed = 0;
+				}
+
+				addr.print();
+
+				// Optional: also queue some for immediate outbound dialing
+				// (keeps behavior similar to "make it connect now")
+				// Keep the queue bounded to avoid runaway growth.
+				//{
+				//    //CRITICAL_BLOCK(cs_vConnect);
+				//    if (vConnect.size() < 32)
+				//        vConnect.push_back(addr);
+				//}
+				AddDNSSeeds();
+			}
+
+			fAnySuccess = true;
+		}
+
+		// Backoff logic similar to IRC thread
+		if (!fAnySuccess)
+		{
+			nErrorWait = nErrorWait * 11 / 10;
+			printf("DNS seed: all failed, waiting %d sec\n", nErrorWait + 60);
+
+			if (Wait(nErrorWait += 60))
+				continue;
+			else
+				return;
+		}
+
+		// If the loop ran a long time, relax backoffs (same spirit as IRC code)
+		if (GetTime() - nStart > 20 * 60)
+		{
+			nErrorWait /= 3;
+			nRetryWait /= 3;
+		}
+
+		// Periodic refresh, but don’t hammer DNS
+		nRetryWait = nRetryWait * 11 / 10;
+		int waitSec = (nRetryWait += 60);
+
+		// In practice: cap refresh so it doesn't become hours
+		if (waitSec > 30 * 60) waitSec = 30 * 60;
+
+		printf("DNS seed: refresh wait %d sec\n", waitSec);
+		if (!Wait(waitSec))
+			return;
+	}
+}
+
+
+
+
+
+
 #include "../database/walletdb/walletdb.h"
 bool StartNode(string& strError)
 {
@@ -457,17 +671,23 @@ bool StartNode(string& strError)
 	if (addrIncoming.ip)
 		addrLocalHost.ip = addrIncoming.ip;\
 
-	if (GetMyExternalIP(addrLocalHost.ip))
-	{
-		addrIncoming = addrLocalHost;
-		CWalletDB().WriteSetting("addrIncoming", addrIncoming);
+	//if (GetMyExternalIP(addrLocalHost.ip))
+	//{
+	//	addrIncoming = addrLocalHost;
+	//	CWalletDB().WriteSetting("addrIncoming", addrIncoming);
 
-	}
+	//}
 
 	std::string threadError;
 	// Get addresses from IRC and advertise ours
 	//AddStaticSeeds();
-	if (!StartThread(ThreadIRCSeed, NULL, 1, threadError))
+	//if (!StartThread(ThreadIRCSeed, NULL, 1, threadError))
+	//{
+	//	printf("Error: StartThread(ThreadIRCSeed) failed: %s\n", threadError.c_str());
+	//	return false;
+	//} // TO DESTROY
+
+	if (!StartThread(ThreadDNSSeed, NULL, 1, threadError))
 	{
 		printf("Error: StartThread(ThreadIRCSeed) failed: %s\n", threadError.c_str());
 		return false;
@@ -476,11 +696,11 @@ bool StartNode(string& strError)
 
 	// Start Threads
 
-	//if (!StartThread(ThreadSocketHandler, new int(hListenSocket), 0, threadError)) {
-	//	strError = "Error: StartThread(ThreadSocketHandler) failed: " + threadError;
-	//	printf("%s\n", strError.c_str());
-	//	return false;
-	//}
+	if (!StartThread(ThreadSocketHandler, new int(hListenSocket), 0, threadError)) {
+		strError = "Error: StartThread(ThreadSocketHandler) failed: " + threadError;
+		printf("%s\n", strError.c_str());
+		return false;
+	}
 
 	if (!StartThread(ThreadOpenConnections, new int(hListenSocket), 0, threadError)) {
 		strError = "Error: StartThread(ThreadOpenConnections2) failed: " + threadError;
@@ -488,11 +708,11 @@ bool StartNode(string& strError)
 		return false;
 	}
 
-	if (!StartThread(ThreadMessageHandler, new int(hListenSocket), 0, threadError)) {
-		strError = "Error: StartThread(ThreadMessageHandler) failed: " + threadError;
-		printf("%s\n", strError.c_str());
-		return false;
-	}
+	//if (!StartThread(ThreadMessageHandler, new int(hListenSocket), 0, threadError)) {
+	//	strError = "Error: StartThread(ThreadMessageHandler) failed: " + threadError;
+	//	printf("%s\n", strError.c_str());
+	//	return false;
+	//}
 
 
 
@@ -819,5 +1039,646 @@ void CheckForShutdown(int n)
 			}
 
 		pthread_exit(nullptr);
+	}
+}
+
+
+
+
+
+
+
+
+void ThreadSocketHandler(void* parg)
+{
+	IMPLEMENT_RANDOMIZE_STACK(ThreadSocketHandler(parg));
+
+	loop
+	{
+		vfThreadRunning[0] = true;
+		CheckForShutdown(0);
+		try
+		{
+			ThreadSocketHandler2(parg);
+		}
+		CATCH_PRINT_EXCEPTION("ThreadSocketHandler()")
+		vfThreadRunning[0] = false;
+		std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+	}
+}
+// WINDOWS version:
+//void ThreadSocketHandler2(void* parg)
+//{
+//	printf("ThreadSocketHandler started\n");
+//	SOCKET hListenSocket = *(SOCKET*)parg;
+//	list<CNode*> vNodesDisconnected;
+//	int nPrevNodeCount = 0;
+//
+//	loop
+//	{
+//		//
+//		// Disconnect nodes
+//		//
+//		CRITICAL_BLOCK(cs_vNodes)
+//		{
+//		// Disconnect unused nodes
+//		vector<CNode*> vNodesCopy = vNodes;
+//		for(CNode * pnode: vNodesCopy)
+//		{
+//			if (pnode->ReadyToDisconnect() && pnode->vRecv.empty() && pnode->vSend.empty())
+//			{
+//				// remove from vNodes
+//				vNodes.erase(remove(vNodes.begin(), vNodes.end(), pnode), vNodes.end());
+//				pnode->Disconnect();
+//
+//				// hold in disconnected pool until all refs are released
+//				pnode->nReleaseTime = std::max(pnode->nReleaseTime, GetTime() + 5 * 60);
+//				if (pnode->fNetworkNode)
+//					pnode->Release();
+//				vNodesDisconnected.push_back(pnode);
+//			}
+//		}
+//
+//		// Delete disconnected nodes
+//		std::list<CNode*> vNodesDisconnectedCopy = vNodesDisconnected;
+//		for(CNode * pnode: vNodesDisconnectedCopy)
+//		{
+//			// wait until threads are done using it
+//			if (pnode->GetRefCount() <= 0)
+//			{
+//				bool fDelete = false;
+//				TRY_CRITICAL_BLOCK(pnode->cs_vSend)
+//				 TRY_CRITICAL_BLOCK(pnode->cs_vRecv)
+//				  TRY_CRITICAL_BLOCK(pnode->cs_mapRequests)
+//				   TRY_CRITICAL_BLOCK(pnode->cs_inventory)
+//					fDelete = true;
+//				if (fDelete)
+//				{
+//					vNodesDisconnected.remove(pnode);
+//					delete pnode;
+//				}
+//			}
+//		}
+//	}
+//	//if (vNodes.size() != nPrevNodeCount)
+//	//{
+//	//	nPrevNodeCount = vNodes.size();
+//	//	MainFrameRepaint();
+//	//}
+//
+//
+//	//
+//	// Find which sockets have data to receive
+//	//
+//	struct timeval timeout;
+//	timeout.tv_sec = 0;
+//	timeout.tv_usec = 50000; // frequency to poll pnode->vSend
+//
+//	struct fd_set fdsetRecv;
+//	struct fd_set fdsetSend;
+//	FD_ZERO(&fdsetRecv);
+//	FD_ZERO(&fdsetSend);
+//	SOCKET hSocketMax = 0;
+//	FD_SET(hListenSocket, &fdsetRecv);
+//	hSocketMax = std::max(hSocketMax, hListenSocket);
+//	CRITICAL_BLOCK(cs_vNodes)
+//	{
+//		for(CNode * pnode: vNodes)
+//		{
+//			FD_SET(pnode->hSocket, &fdsetRecv);
+//			hSocketMax = std::max(hSocketMax, pnode->hSocket);
+//			TRY_CRITICAL_BLOCK(pnode->cs_vSend)
+//				if (!pnode->vSend.empty())
+//					FD_SET(pnode->hSocket, &fdsetSend);
+//		}
+//	}
+//
+//	vfThreadRunning[0] = false;
+//	int nSelect = select(hSocketMax + 1, &fdsetRecv, &fdsetSend, NULL, &timeout);
+//	vfThreadRunning[0] = true;
+//	CheckForShutdown(0);
+//	if (nSelect == SOCKET_ERROR)
+//	{
+//		int nErr = WSAGetLastError();
+//		printf("select failed: %d\n", nErr);
+//		for (int i = 0; i <= hSocketMax; i++)
+//		{
+//			FD_SET(i, &fdsetRecv);
+//			FD_SET(i, &fdsetSend);
+//		}
+//		std::this_thread::sleep_for(std::chrono::milliseconds(timeout.tv_usec / 1000));
+//
+//	}
+//	RandAddSeed();
+//
+//	//// debug print
+//	//foreach(CNode* pnode, vNodes)
+//	//{
+//	//    printf("vRecv = %-5d ", pnode->vRecv.size());
+//	//    printf("vSend = %-5d    ", pnode->vSend.size());
+//	//}
+//	//printf("\n");
+//
+//
+//	//
+//	// Accept new connections
+//	//
+//	if (FD_ISSET(hListenSocket, &fdsetRecv))
+//	{
+//		struct sockaddr_in sockaddr;
+//		int len = sizeof(sockaddr);
+//		SOCKET hSocket = accept(hListenSocket, (struct sockaddr*)&sockaddr, &len);
+//		CAddress addr(sockaddr);
+//		if (hSocket == INVALID_SOCKET)
+//		{
+//			if (WSAGetLastError() != WSAEWOULDBLOCK)
+//				printf("ERROR ThreadSocketHandler accept failed: %d\n", WSAGetLastError());
+//		}
+//		else
+//		{
+//			printf("accepted connection from %s\n", addr.ToString().c_str());
+//			CNode* pnode = new CNode(hSocket, addr, true);
+//			pnode->AddRef();
+//			CRITICAL_BLOCK(cs_vNodes)
+//				vNodes.push_back(pnode);
+//		}
+//	}
+//
+//
+//	//
+//	// Service each socket
+//	//
+//	vector<CNode*> vNodesCopy;
+//	CRITICAL_BLOCK(cs_vNodes)
+//		vNodesCopy = vNodes;
+//	foreach(CNode * pnode, vNodesCopy)
+//	{
+//		CheckForShutdown(0);
+//		SOCKET hSocket = pnode->hSocket;
+//
+//		//
+//		// Receive
+//		//
+//		if (FD_ISSET(hSocket, &fdsetRecv))
+//		{
+//			TRY_CRITICAL_BLOCK(pnode->cs_vRecv)
+//			{
+//				CDataStream& vRecv = pnode->vRecv;
+//				unsigned int nPos = vRecv.size();
+//
+//				// typical socket buffer is 8K-64K
+//				const unsigned int nBufSize = 0x10000;
+//				vRecv.resize(nPos + nBufSize);
+//				int nBytes = recv(hSocket, &vRecv[nPos], nBufSize, 0);
+//				vRecv.resize(nPos + max(nBytes, 0));
+//				if (nBytes == 0)
+//				{
+//					// socket closed gracefully
+//					if (!pnode->fDisconnect)
+//						printf("recv: socket closed\n");
+//					pnode->fDisconnect = true;
+//				}
+//				else if (nBytes < 0)
+//				{
+//					// socket error
+//					int nErr = WSAGetLastError();
+//					if (nErr != WSAEWOULDBLOCK && nErr != WSAEMSGSIZE && nErr != WSAEINTR && nErr != WSAEINPROGRESS)
+//					{
+//						if (!pnode->fDisconnect)
+//							printf("recv failed: %d\n", nErr);
+//						pnode->fDisconnect = true;
+//					}
+//				}
+//			}
+//		}
+//
+//		//
+//		// Send
+//		//
+//		if (FD_ISSET(hSocket, &fdsetSend))
+//		{
+//			TRY_CRITICAL_BLOCK(pnode->cs_vSend)
+//			{
+//				CDataStream& vSend = pnode->vSend;
+//				if (!vSend.empty())
+//				{
+//					int nBytes = send(hSocket, &vSend[0], vSend.size(), 0);
+//					if (nBytes > 0)
+//					{
+//						vSend.erase(vSend.begin(), vSend.begin() + nBytes);
+//					}
+//					else if (nBytes == 0)
+//					{
+//						if (pnode->ReadyToDisconnect())
+//							pnode->vSend.clear();
+//					}
+//					else
+//					{
+//						printf("send error %d\n", nBytes);
+//						if (pnode->ReadyToDisconnect())
+//							pnode->vSend.clear();
+//					}
+//				}
+//			}
+//		}
+//	}
+//
+//
+//	Sleep(10);
+//	}
+//}
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <errno.h>
+#include <algorithm>
+#include <chrono>
+#include <thread>
+
+// Helpers (if you don't already have equivalents)
+static inline bool IsWouldBlock(int e)
+{
+	return e == EWOULDBLOCK || e == EAGAIN;
+}
+
+void ThreadSocketHandler2(void* parg)
+{
+	printf("ThreadSocketHandler started\n");
+
+	int hListenSocket = *(int*)parg;   // POSIX fd
+	std::list<CNode*> vNodesDisconnected;
+	int nPrevNodeCount = 0;
+
+	loop
+	{
+		//
+		// Disconnect nodes
+		//
+		CRITICAL_BLOCK(cs_vNodes)
+		{
+		// Disconnect unused nodes
+		std::vector<CNode*> vNodesCopy = vNodes;
+		for (CNode* pnode : vNodesCopy)
+		{
+			if (pnode->ReadyToDisconnect() && pnode->vRecv.empty() && pnode->vSend.empty())
+			{
+				// remove from vNodes
+				vNodes.erase(std::remove(vNodes.begin(), vNodes.end(), pnode), vNodes.end());
+				pnode->Disconnect(); // should close(pnode->hSocket) inside for Linux
+
+				// hold in disconnected pool until all refs are released
+				pnode->nReleaseTime = std::max(pnode->nReleaseTime, GetTime() + 5 * 60);
+				if (pnode->fNetworkNode)
+					pnode->Release();
+				vNodesDisconnected.push_back(pnode);
+			}
+		}
+
+		// Delete disconnected nodes
+		std::list<CNode*> vNodesDisconnectedCopy = vNodesDisconnected;
+		for (CNode* pnode : vNodesDisconnectedCopy)
+		{
+			// wait until threads are done using it
+			if (pnode->GetRefCount() <= 0)
+			{
+				bool fDelete = false;
+				TRY_CRITICAL_BLOCK(pnode->cs_vSend)
+					TRY_CRITICAL_BLOCK(pnode->cs_vRecv)
+						TRY_CRITICAL_BLOCK(pnode->cs_mapRequests)
+							TRY_CRITICAL_BLOCK(pnode->cs_inventory)
+								fDelete = true;
+
+				if (fDelete)
+				{
+					vNodesDisconnected.remove(pnode);
+					delete pnode;
+				}
+			}
+		}
+	}
+
+	//
+	// Find which sockets have data to receive / send
+	//
+	timeval timeout;
+	timeout.tv_sec = 0;
+	timeout.tv_usec = 50000; // poll frequency (50ms)
+
+	fd_set fdsetRecv;
+	fd_set fdsetSend;
+	FD_ZERO(&fdsetRecv);
+	FD_ZERO(&fdsetSend);
+
+	int hSocketMax = 0;
+
+	FD_SET(hListenSocket, &fdsetRecv);
+	hSocketMax = std::max(hSocketMax, hListenSocket);
+
+	CRITICAL_BLOCK(cs_vNodes)
+	{
+		for (CNode* pnode : vNodes)
+		{
+			int s = pnode->hSocket; // POSIX fd
+			if (s < 0) continue;
+
+			FD_SET(s, &fdsetRecv);
+			hSocketMax = std::max(hSocketMax, s);
+
+			TRY_CRITICAL_BLOCK(pnode->cs_vSend)
+				if (!pnode->vSend.empty())
+					FD_SET(s, &fdsetSend);
+		}
+	}
+
+	vfThreadRunning[0] = false;
+	int nSelect = select(hSocketMax + 1, &fdsetRecv, &fdsetSend, nullptr, &timeout);
+	vfThreadRunning[0] = true;
+
+	CheckForShutdown(0);
+
+	if (nSelect < 0)
+	{
+		int nErr = errno;
+		printf("select failed: %d (%s)\n", nErr, strerror(nErr));
+
+		// If select was interrupted, just continue quickly
+		if (nErr == EINTR)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			continue;
+		}
+
+		// For other errors, sleep briefly to avoid a tight loop
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		continue;
+	}
+
+	RandAddSeed(true);
+
+	//
+	// Accept new connections
+	//
+	if (FD_ISSET(hListenSocket, &fdsetRecv))
+	{
+		sockaddr_in sa;
+		socklen_t len = sizeof(sa);
+
+		int hSocket = accept(hListenSocket, (sockaddr*)&sa, &len);
+		if (hSocket < 0)
+		{
+			int e = errno;
+			if (!IsWouldBlock(e) && e != EINTR)
+				printf("ERROR ThreadSocketHandler accept failed: %d (%s)\n", e, strerror(e));
+		}
+		else
+		{
+			CAddress addr(sa);
+			printf("accepted connection from %s\n", addr.ToString().c_str());
+
+			// accepted sockets inherit nonblocking if listen socket was nonblocking on Linux?:
+			// Actually: accepted socket does NOT always inherit O_NONBLOCK on all POSIX.
+			// Safe: explicitly set nonblocking here if your code assumes nonblocking.
+			int flags = fcntl(hSocket, F_GETFL, 0);
+			if (flags != -1)
+				fcntl(hSocket, F_SETFL, flags | O_NONBLOCK);
+
+			CNode* pnode = new CNode(hSocket, addr, true);
+			pnode->AddRef();
+
+			CRITICAL_BLOCK(cs_vNodes)
+				vNodes.push_back(pnode);
+		}
+	}
+
+	//
+	// Service each socket
+	//
+	std::vector<CNode*> vNodesCopy;
+	CRITICAL_BLOCK(cs_vNodes)
+		vNodesCopy = vNodes;
+
+	for (CNode* pnode : vNodesCopy)
+	{
+		CheckForShutdown(0);
+		int hSocket = pnode->hSocket;
+
+		//
+		// Receive
+		//
+		if (hSocket >= 0 && FD_ISSET(hSocket, &fdsetRecv))
+		{
+			TRY_CRITICAL_BLOCK(pnode->cs_vRecv)
+			{
+				CDataStream& vRecv = pnode->vRecv;
+				unsigned int nPos = vRecv.size();
+
+				const unsigned int nBufSize = 0x10000; // 64KB
+				vRecv.resize(nPos + nBufSize);
+
+				int nBytes = (int)recv(hSocket, (char*)&vRecv[nPos], nBufSize, 0);
+
+				vRecv.resize(nPos + std::max(nBytes, 0));
+
+				if (nBytes == 0)
+				{
+					if (!pnode->fDisconnect)
+						printf("recv: socket closed\n");
+					pnode->fDisconnect = true;
+				}
+				else if (nBytes < 0)
+				{
+					int e = errno;
+					// ignore transient nonblocking conditions
+					if (!IsWouldBlock(e) && e != EMSGSIZE && e != EINTR && e != EINPROGRESS)
+					{
+						if (!pnode->fDisconnect)
+							printf("recv failed: %d (%s)\n", e, strerror(e));
+						pnode->fDisconnect = true;
+					}
+				}
+			}
+		}
+
+		//
+		// Send
+		//
+		if (hSocket >= 0 && FD_ISSET(hSocket, &fdsetSend))
+		{
+			TRY_CRITICAL_BLOCK(pnode->cs_vSend)
+			{
+				CDataStream& vSend = pnode->vSend;
+				if (!vSend.empty())
+				{
+					int nBytes = (int)send(hSocket, (const char*)&vSend[0], vSend.size(), 0);
+
+					if (nBytes > 0)
+					{
+						vSend.erase(vSend.begin(), vSend.begin() + nBytes);
+					}
+					else if (nBytes == 0)
+					{
+						if (pnode->ReadyToDisconnect())
+							pnode->vSend.clear();
+					}
+					else
+					{
+						int e = errno;
+						if (!IsWouldBlock(e) && e != EINTR && e != EINPROGRESS)
+						{
+							printf("send failed: %d (%s)\n", e, strerror(e));
+							if (pnode->ReadyToDisconnect())
+								pnode->vSend.clear();
+							else
+								pnode->fDisconnect = true;
+						}
+						// else: would-block, keep data queued
+					}
+				}
+			}
+		}
+	}
+
+	// Your existing Sleep(ms) wrapper if you have it:
+	//Sleep(10);
+	// or:
+	 std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+}
+
+
+
+
+void CNode::Disconnect()
+{
+	printf("disconnecting node %s\n", addr.ToString().c_str());
+
+	// Close socket (Linux/POSIX)
+	int s = hSocket;
+	hSocket = -1; // prevent races from reusing it
+
+	if (s >= 0)
+	{
+		// Best-effort shutdown; ignore errors
+		shutdown(s, SHUT_RDWR);
+		close(s);
+	}
+
+	// If outbound and never got version message, mark address as failed
+	if (!fInbound && nVersion == 0)
+	{
+		CRITICAL_BLOCK(cs_mapAddresses)
+		{
+			auto key = addr.GetKey();
+			if (mapAddresses.count(key))
+				mapAddresses[key].nLastFailed = GetTime();
+			// else: don't create a new entry implicitly
+		}
+	}
+
+	// Tear down product adverts (legacy marketplace bits)
+	//CRITICAL_BLOCK(cs_mapProducts)
+	//{
+	//	for (auto mi = mapProducts.begin(); mi != mapProducts.end(); )
+	//		AdvertRemoveSource(this, MSG_PRODUCT, 0, (mi++)->second);
+	//}
+
+	// Cancel subscriptions
+	for (unsigned int nChannel = 0; nChannel < vfSubscribe.size(); nChannel++)
+		if (vfSubscribe[nChannel])
+			CancelSubscribe(nChannel);
+}
+
+bool AnySubscribed(unsigned int nChannel)
+{
+	if (pnodeLocalHost && pnodeLocalHost->IsSubscribed(nChannel))
+		return true;
+
+	bool any = false;
+
+	CRITICAL_BLOCK(cs_vNodes)
+	{
+		for (CNode* pnode : vNodes)
+		{
+			if (pnode && pnode->IsSubscribed(nChannel))
+			{
+				any = true;
+				break;
+			}
+		}
+	}
+
+	return any;
+}
+
+bool CNode::IsSubscribed(unsigned int nChannel)
+{
+	if (nChannel >= vfSubscribe.size())
+		return false;
+	return vfSubscribe[nChannel];
+}
+
+void CNode::Subscribe(unsigned int nChannel, unsigned int nHops)
+{
+	if (nChannel >= vfSubscribe.size())
+		return;
+
+	// If nobody is subscribed yet, we relay a subscribe to help bootstrap the channel
+	if (!AnySubscribed(nChannel))
+	{
+		std::vector<CNode*> nodes;
+		CRITICAL_BLOCK(cs_vNodes)
+		{
+			nodes = vNodes;
+		}
+
+		for (CNode* pnode : nodes)
+		{
+			if (pnode != this)
+				pnode->PushMessage("subscribe", nChannel, nHops);
+		}
+	}
+
+	vfSubscribe[nChannel] = true;
+}
+
+
+
+void CNode::CancelSubscribe(unsigned int nChannel)
+{
+	if (nChannel >= vfSubscribe.size())
+		return;
+
+	// Prevent from relaying cancel if wasn't subscribed
+	if (!vfSubscribe[nChannel])
+		return;
+
+	vfSubscribe[nChannel] = false;
+
+	if (!AnySubscribed(nChannel))
+	{
+		// Take a snapshot of nodes under lock, then release lock before PushMessage
+		std::vector<CNode*> nodes;
+		CRITICAL_BLOCK(cs_vNodes)
+		{
+			nodes = vNodes;
+		}
+
+		// Relay subscription cancel
+		for (CNode* pnode : nodes)
+		{
+			if (pnode != this)
+				pnode->PushMessage("sub-cancel", nChannel);
+		}
+
+		//// Clear memory, no longer subscribed
+		//if (nChannel == MSG_PRODUCT)
+		//{
+		//	CRITICAL_BLOCK(cs_mapProducts)
+		//		mapProducts.clear();
+		//}
 	}
 }
