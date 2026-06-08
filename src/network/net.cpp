@@ -451,6 +451,22 @@ static const char* DNS_SEEDS[] = {
 };
 static const int NUM_DNS_SEEDS = sizeof(DNS_SEEDS) / sizeof(DNS_SEEDS[0]);
 
+bool IsLocalAddress(const CAddress& addr)
+{
+	// Compare against our known local / advertised addresses
+	if (addr.ip == addrLocalHost.ip)
+		return true;
+
+	if (addrIncoming.ip && addr.ip == addrIncoming.ip)
+		return true;
+
+	// Exclude loopback explicitly
+	if ((ntohl(addr.ip) >> 24) == 127)
+		return true;
+
+	return false;
+}
+
 
 
 void AddDNSSeeds()
@@ -471,6 +487,9 @@ void AddDNSSeeds()
 			CAddress addr(sa->sin_addr.s_addr, DEFAULT_PORT);
 
 			if (!addr.IsRoutable())
+				continue;
+
+			if (IsLocalAddress(addr)) // make it a member function of addr in the future.
 				continue;
 
 			CRITICAL_BLOCK(cs_vConnect);
@@ -524,6 +543,9 @@ void ThreadDNSSeed(void* parg)
 				if (!addr.IsRoutable())
 					continue;
 
+				if (IsLocalAddress(addr)) // make it a member function of addr in the future.
+					continue;
+
 				// Add to addrman/mapAddresses through the same path you used
 				CAddrDB addrdb;
 				if (AddAddress(addrdb, addr))
@@ -548,6 +570,7 @@ void ThreadDNSSeed(void* parg)
 				//    if (vConnect.size() < 32)
 				//        vConnect.push_back(addr);
 				//}
+				//CRITICAL_BLOCK(cs_vConnect);
 				AddDNSSeeds();
 			}
 
